@@ -1,0 +1,11 @@
+{
+    "Id":"ffx2TurnBased",
+    "Name":"FFX-2 Turn Based Mod",
+    "Desc":"Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
+    "Authors": "jmx532",
+    "Version":"1.0.0-alpha",
+    "Link":"https://github.com/peppy-enterprises/fh-mods-template",
+    "Dependencies":[],
+    "LoadAfter":[],
+    "Flags":"SEPARATE_SAVES"
+}
