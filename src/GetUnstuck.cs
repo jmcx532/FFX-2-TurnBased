@@ -25,7 +25,7 @@ public unsafe class UnstuckModule : FhModule {
         if (*chr_base_address != 0) {
 
             ImGui.Begin(
-                "Get Unstuck",
+                "Turn-based Debug",
                 ImGuiWindowFlags.NoFocusOnAppearing
                 );
 

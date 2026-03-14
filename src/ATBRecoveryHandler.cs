@@ -6,11 +6,8 @@
  * as the Charge Time mechanic was removed.
  */
 
-using Hexa.NET.ImGui;
-using System;
-using System.Linq;
-using System.Numerics;
 using TerraFX.Interop.Windows;
+using static Fahrenheit.Core.FFX.Battle.ChrRam;
 
 namespace Fahrenheit.Modules.ATBRecoveryHandler;
 
@@ -57,6 +54,22 @@ public unsafe class ATBRecoveryModule : FhModule {
         
     }
 
+    //SUB-FUNCTIONS
+    public int h_get_chr_addr(uint chr_id) {
+        return _chr_addr_handle.orig_fptr.Invoke(chr_id);
+    }
+
+    //this function returns the base address for commands
+    //param_1 is the command id (e.g 0x3002)
+    public unsafe int h_get_cmd_addr(uint command_id, int* param_2) {
+        //_logger.Info("GET_CMD_ADDR PARAM_1 is:" + param_1.ToString("X"));
+        return _get_cmd_base_addr_handle.orig_fptr.Invoke(command_id, param_2);
+    }
+    public int h_clamp_between(int param_1, int param_2, int param_3) {
+        return _clamp_between_handle.orig_fptr.Invoke(param_1, param_2, param_3);
+    }
+
+    //MAIN FUNCTIONS---------------------------------------------------------------------------------------------------
     //called constantly - not a one and done function - use atb_rec_writer for those types of effects
     public int h_atb_recovery_calculator(uint chr_id, uint command_id) {
         int chr_base_address;
@@ -124,7 +137,7 @@ public unsafe class ATBRecoveryModule : FhModule {
     }
 
 
-    //Charge time reduction function replacement
+    // A-Ability Charge time reduction function replacement ------------------------------------------- 
     //returns the proper percentage reduction for auto-abilities that originally reduced charge time
     //so it can be used to reduce ATB recovery instead.
     //For command_used/param_2 it is the command id (for example: 0x308f for Unhinge)
@@ -180,7 +193,8 @@ public unsafe class ATBRecoveryModule : FhModule {
         return recov_time_reduction;
     }
 
-    //6401c0 - called 'once' after character takes turn - 
+
+    //6401c0 - called 'once' after character takes turn -------------------------------------------------------- 
     public uint h_atb_rec_writer(uint chr_id, int param_2, int param_3) {
         uint original_result = _atb_rec_writer_handle.orig_fptr.Invoke(chr_id, param_2, param_3);
         uint command_used = (uint)*(ushort*)(param_3 + 0xa4);
@@ -190,10 +204,10 @@ public unsafe class ATBRecoveryModule : FhModule {
         nint chr_base_address = h_get_chr_addr(chr_id);
         *(int*)(chr_base_address + 0x684) = 16001;
 
-        //Bugfix - always set their their +0xEC2 flag to 1 after acting - could maybe replace WaitFlagWriter exception coomands?
+        /* always set their their +0xEC2 flag to 1 after acting - could maybe replace WaitFlagWriter exception commands? --> Nope
         if (chr_id < 3) {
             *(byte*)(chr_base_address + 0xec2) = 1;
-        }
+        }*/
 
         //Time-trip handling - disable so you can't spam it over and Stop the enemy forever
         if (command_used == 0x31EA) {
@@ -204,7 +218,7 @@ public unsafe class ATBRecoveryModule : FhModule {
         return original_result;
     }
 
-    //function to disable Psychics Time Trip command
+    //function to disable Psychics Time Trip command --------------------------------------
     public void disable_time_Trip() {
         
             //get the commands data 
@@ -219,37 +233,64 @@ public unsafe class ATBRecoveryModule : FhModule {
         
     }
 
-
-    /* TURN ORDER WINDOW STUFF */
-    public struct CTBCurrentEntry {
-        public string Name;
-        public int Slot;
-        public int ATB_Left;
-    }
-
-    public struct CTBTurn {
-        public int Slot;
-        public string Name;
-        public int Time;      // time until that turn happens
-        public bool IsGhost;  // false=next real turn, true=future preview
-    }
+    // TURN ORDER WINDOW STUFF ----------------------------------------------------------------------------
 
     const int CHR_STRIDE = 0x17E0;
-    const int ATB_OFFSET = 0x9D8;
+    const int ATB_REMAIN_OFFSET = 0x9D8;
+    const int ATB_LENGTH_OFFSET = 0x9DC;
+ 
 
-    unsafe int ReadATB(int chrBase, int slot) {
-        return *(int*)(chrBase + ATB_OFFSET + (slot * CHR_STRIDE));
+    /* function that converts a character's raw ATB remaining value, into ticks - based on the games ATB Speed config value
+     * that is fixed to 95 for Slow/Normal/Fast
+     * 
+     * Used for character's immediate next turn -- include the character who currently has the turn
+     * This and the next function use 1050 because 1050 * 95 = 99750 , and the ATB calculation clamps largest possible value to 99999
+     * though it never goes this high in practice
+     */
+    float ReadATBTicksLeft(uint chr_id) {
+        int chr_base_addr = h_get_chr_addr(chr_id);
+        int atb_remaining = *(int*)(chr_base_addr + ATB_REMAIN_OFFSET);
+
+        // if ATB is full, return 1050 - full bar
+        if (atb_remaining == 0) { return 1050.0f; }
+        // calculate ticks
+        double ticks_left = Math.Ceiling((double)atb_remaining / 95);
+        return (float)(1050 - ticks_left);
     }
 
-    unsafe CTBCurrentEntry BuildCTB(int baseAddr, int slot, string name) {
-        int atb = ReadATB(baseAddr, slot);
-        return new CTBCurrentEntry {
-            Name = name,
-            Slot = slot,
-            ATB_Left = atb
-        };
+    // similar to above, but used to calculate values for future turns
+    float[] GetNextATBTicksLeft(uint chr_id, bool isTheirTurn) {
+        int chr_base_addr = h_get_chr_addr(chr_id);
+        int atb_remaining = *(int*)(chr_base_addr + ATB_REMAIN_OFFSET);
+        // create an array to store 2 future turn values
+        float[] ticks_left_array = new float[2];
+
+        //for the character that has the turn currently
+        if (isTheirTurn) {
+            //get the command the player hovers over, and run the ATB Recovery calculation, add it to their current value for the answer
+            ushort hovered_command = GetHoveredCommand();
+            int future_turn_atb_val = h_atb_recovery_calculator(chr_id, hovered_command) + atb_remaining;
+            //for the turn after, calculate using Attack and add the result of the previous calculation
+            int future_turn_atb_val2 = h_atb_recovery_calculator(chr_id, 0x2C30) + future_turn_atb_val;
+            //invert and calculate ticks
+            ticks_left_array[0] = 1050 - (future_turn_atb_val / 95);
+            ticks_left_array[1] = 1050 - (future_turn_atb_val2 / 95);
+
+        }
+        else {
+            //for character's that don't have the current turn - calculate 2 future turn ticks using Attack
+            int future_turn_atb_val = h_atb_recovery_calculator(chr_id, 0x2C30) + atb_remaining;
+            int future_turn_atb_val2 = h_atb_recovery_calculator(chr_id, 0x2C30)+ future_turn_atb_val;
+            //invert and calculate ticks
+            ticks_left_array[0] = 1050 - (future_turn_atb_val / 95);
+            ticks_left_array[1] = 1050 - (future_turn_atb_val2 / 95);
+        }
+        
+        return ticks_left_array;
+
     }
 
+    //returns the id of which command is being hovered over, used to update the view when current character hovers over different commands
     ushort GetHoveredCommand() {
         ushort sub  = FhUtil.get_at<ushort>(0x00DB7388);
         ushort main = FhUtil.get_at<ushort>(0x00DB7380);
@@ -259,19 +300,55 @@ public unsafe class ATBRecoveryModule : FhModule {
             : main;
     }
 
-    uint GetActiveMenuChr() => FhUtil.get_at<uint>(0x00DB747C);
+    // CTB Style widget ----------------------------
+    void CTBStyleBar(float normalized_value, Vector2 size) {
 
-    float NormalizeCTB(int value, int max) {
-        float v = value / (float)max;
-        //return MathF.Sqrt(v);   // perceptual curve
-        return v;
+        var draw = ImGui.GetWindowDrawList();
+        Vector2 pos = ImGui.GetCursorScreenPos();
+
+        // thresholds for each visual layer
+        float[] layers = { 0f, 0.2f, 0.4f, .6f, 0.8f };
+
+        Vector4[] colors =
+    {
+        new Vector4(0.20f, 0.00f, 0.35f, 1f), // deep purple
+        new Vector4(0.35f, 0.05f, 0.55f, 1f),
+        new Vector4(0.55f, 0.15f, 0.75f, 1f),
+        new Vector4(0.75f, 0.30f, 0.90f, 1f),
+        new Vector4(0.90f, 0.60f, 1.00f, 1f)  // brightest
+    };
+
+        uint bg = ImGui.GetColorU32(new Vector4(0.05f, 0.02f, 0.08f, 1));
+
+        draw.AddRectFilled(pos, pos + size, bg);
+
+        for (int i = 0; i < layers.Length; i++) {
+            // Adjust the fill logic based on the new max value
+            float fill = Math.Clamp((normalized_value - layers[i]) / (1f - layers[i]), 0f, 1f);
+
+            if (fill <= 0f)
+                continue;
+
+            Vector2 fillMax = pos + new Vector2(size.X * fill, size.Y);
+
+            draw.AddRectFilled(
+                pos,
+                fillMax,
+                ImGui.GetColorU32(colors[i])
+            );
+        }
+
+        ImGui.Dummy(size);
     }
 
     //function to read character's name string
-    unsafe string ReadChrName(int chrBase) {
-        byte* p = (byte*)(chrBase + 0x358);
-        Span<byte> buf = stackalloc byte[16];
+    unsafe string ReadChrName(uint chr_id) {
+        int chr_base_addr = h_get_chr_addr(chr_id);
+        //pointer to start of Chr name string
+        byte* p = (byte*)(chr_base_addr + 0x358);
+        Span<byte> buf = stackalloc byte[40];
 
+        // read character bytes into buffer
         int len = 0;
         for (int i = 0; i < 16; i++) {
             byte b = p[i];
@@ -279,136 +356,102 @@ public unsafe class ATBRecoveryModule : FhModule {
             buf[len++] = b;
         }
 
-        Span<byte> decoded_string = stackalloc byte[64];
+        // create Span for Fh decoded string
+        Span<byte> decoded_string = stackalloc byte[40];
+        // Decode the bytes from FFXX-2 encoding to normal ASCII
         FhEncoding.decode(buf, decoded_string, FhLangId.English, FhGameId.FFX2);
-        
 
         return System.Text.Encoding.ASCII.GetString(decoded_string.Slice(0, len));
     }
 
-    private int _ctbHorizon = 1;
-
+    
+    // TURN ORDER WINDOW RENDERING --------------------------------------------------
     public override void render_imgui() {
         base.render_imgui();
         int num_allies_ready = FhUtil.get_at<int>(0xDB7480);
 
+        // if a player character has a turn - show the turn order window
         if (num_allies_ready != 0) {
 
             ImGui.Begin(
+                // doesn't grab focus, and you can't collapse the window
                 "Turn Order",
                 ImGuiWindowFlags.NoFocusOnAppearing |
                 ImGuiWindowFlags.NoCollapse
             );
 
-            var entries = new List<CTBCurrentEntry>();
-            int chrBase = h_get_chr_addr(0);
+            int chr_structs_start = h_get_chr_addr(0);
+            // get the ID of the character who currently has the turn
+            uint active_chr_id = FhUtil.get_at<uint>(0x00DB747C);
 
-            for (uint i = 0; i < 31; i++) {
-                int chr_base_addr = h_get_chr_addr(i);
+            /* create a list that will store character's turn information
+             * Floats that represent how close they are to getting a turn
+             * String for their character name.
+             */
+            var TurnOrderList = new List<Tuple<float, string>>();
+            
+            // add immediate next turn entries - including 0 left for character with current turn 
+            for (uint chr_id = 0; chr_id < 0x1f; chr_id++) {
+
+                int chr_base_addr = h_get_chr_addr(chr_id);
                 byte actual_unit = *(byte*)(chr_base_addr + 0x1784);
                 int remaining_hp = *(int*)(chr_base_addr + 0x3b4);
 
+                // if is an actual unit and has HP remaining
                 if (actual_unit == 1 && remaining_hp > 0) {
-                    string name = ReadChrName(chr_base_addr);
-                    entries.Add(BuildCTB(chrBase, (int)i, name));
+                    //add the character's immediate turn to the list
+                    TurnOrderList.Add(Tuple.Create(ReadATBTicksLeft(chr_id), ReadChrName(chr_id)));
                 }
             }
 
-            var sorted = entries.OrderBy(x => x.ATB_Left).ToList();
+            //add future turn entries 
+            for (uint chr_id = 0; chr_id < 0x1f; chr_id++) {
 
-            // ---- Build preview timeline ----
-            const int PREVIEW_TURNS_PER_BATTLER = 3;
-            const int QUEUE_SIZE = 16;
+                int chr_base_addr = h_get_chr_addr(chr_id);
+                byte actual_unit = *(byte*)(chr_base_addr + 0x1784);
+                int remaining_hp = *(int*)(chr_base_addr + 0x3b4);
 
-            var timeline = new List<CTBTurn>(sorted.Count * PREVIEW_TURNS_PER_BATTLER);
+                // if is an actual unit and has HP remaining
+                if (actual_unit == 1 && remaining_hp > 0) {
+                    if (chr_id == active_chr_id) {
+                        float[] ticks_left_array = GetNextATBTicksLeft(chr_id, true);
+                        TurnOrderList.Add(Tuple.Create(ticks_left_array[0], ReadChrName(chr_id)));
+                        TurnOrderList.Add(Tuple.Create(ticks_left_array[1], ReadChrName(chr_id)));
+                    }
+                    else {
+                        float[] ticks_left_array = GetNextATBTicksLeft(chr_id, false);
+                        TurnOrderList.Add(Tuple.Create(ticks_left_array[0], ReadChrName(chr_id)));
+                        TurnOrderList.Add(Tuple.Create(ticks_left_array[1], ReadChrName(chr_id)));
+                    }
 
-            foreach (var e in sorted) {
-                int t = e.ATB_Left;
-
-                uint active = GetActiveMenuChr();
-                ushort hovered = GetHoveredCommand();
-
-                int rec = (e.Slot == active)
-                    ? h_atb_recovery_calculator((uint)e.Slot, hovered)
-                    : h_atb_recovery_calculator((uint)e.Slot, 0x2C30);
-
-                //if (rec <= 0) rec = 3000;
-
-                for (int n = 0; n < PREVIEW_TURNS_PER_BATTLER; n++) {
-                    timeline.Add(new CTBTurn {
-                        Slot = e.Slot,
-                        Name = e.Name,
-                        Time = t,
-                        IsGhost = (n != 0)
-                    });
-
-                    t += rec;
+                    
                 }
             }
 
-            var queue = timeline.OrderBy(t => t.Time).Take(QUEUE_SIZE).ToList();
+            // sort and draw from the Turn Order list
+            var sortedList = TurnOrderList.OrderByDescending(x => x.Item1).ToList();
+            // get min/max and range for normalisation so all bars aren't all bright and nearly full
+            float minTicks = TurnOrderList.Min(x => x.Item1);
+            float maxTicks = TurnOrderList.Max(x => x.Item1);
+            float range = Math.Max(1f, maxTicks - minTicks);
 
-            
-            int frameMax = queue.Max(t => t.Time);
-            if (frameMax > _ctbHorizon)
-                _ctbHorizon = frameMax;
-            else
-                _ctbHorizon = Math.Max(frameMax, _ctbHorizon - 250); // decay slowly
-            int maxTime = _ctbHorizon;
-            
+            // for each item in TurnOrderList (sorted) - Create a CTBStyleBar, and on the same line, print the character name.
+            foreach (var item in sortedList) {
+                float normalized = (item.Item1 - minTicks) / range;
 
-            // ---- Draw queue ONLY ----
-            foreach (var t in queue) {
-
-                float pct = NormalizeCTB(t.Time, maxTime);
-                if (!float.IsFinite(pct)) pct = 0f;
-                pct = Math.Clamp(pct, 0f, 1f);
-
-                bool isEnemy = t.Slot >= 15;
-
-                if (isEnemy) {
-                    ImGui.PushStyleColor(ImGuiCol.PlotHistogram, new Vector4(0.85f, 0.25f, 0.25f, 1f));
-                    ImGui.PushStyleColor(ImGuiCol.FrameBg, new Vector4(0.25f, 0.05f, 0.05f, 1f));
-                }
-
-                ImGui.PushID(t.Slot);
-                ImGui.ProgressBar(pct, new Vector2(32, 28), $"##ctb_{t.Time}");
-                ImGui.PopID();
-
+                CTBStyleBar(normalized, new Vector2(/*(1 - normalized) */ 32, 28));
                 ImGui.SameLine();
-                if(isEnemy){
-                    ImGui.Text(t.Name + " " +  ((t.Slot % 15) + 1) );
-                }
-                else {
-                    ImGui.Text(t.Name);
-                }
-                
-
-                if (isEnemy) { ImGui.PopStyleColor(2); }
-
+                ImGui.Text(item.Item2);
             }
 
             ImGui.End();
         }
     }
 
-    //sub functions
-    public int h_get_chr_addr(uint chr_id) {
-        return _chr_addr_handle.orig_fptr.Invoke(chr_id);
-    }
-
-    //this function returns the base address for commands
-    //param_1 is the command id (e.g 0x3002)
-    public unsafe int h_get_cmd_addr(uint command_id, int *param_2) {
-        //_logger.Info("GET_CMD_ADDR PARAM_1 is:" + param_1.ToString("X"));
-         return _get_cmd_base_addr_handle.orig_fptr.Invoke(command_id, param_2);
-    }
-    public int h_clamp_between(int param_1, int param_2, int param_3) {
-        return _clamp_between_handle.orig_fptr.Invoke(param_1, param_2, param_3);
-    }
+  
 
     
-    //Fh init
+    // FH init ------------------------------------------------------------------------------------
     public override bool init(FhModContext mod_context, FileStream global_state_file) {
         _atb_recovery_handle.hook();
         _atb_rec_writer_handle.hook();

@@ -48,12 +48,13 @@ public class TurnBasedModule : FhModule {
             uint status = *(uint*)(chr_base + 0x434);
             bool isAlive = (status & 0x1) == 0;
             if (!isAlive)
-                continue; // dead - stop
+                continue; // dead - go to next iteration/character in for loop
 
             //Attack / counter attack handling
             //for counter-attack handling, I had to monitor a certain flag, but it misbehaves if certain commands are used
             // and the wait flag is stuck because it isn't set correctly. This relates to the yrp_state checks below*
             //check for Escape, Scan, Teleport... ,dresspheres are for when SpecialDressphere dies
+
             var exceptionCommands = new HashSet<int> {0x3001,0x303D, 0x31EE,0x5001,0x5002,0x5003,0x5004,0x5005,0x5006,0x5007,0x5008,
                                                 0x5009,0x500A,0x500B,0x500C,0x500D,0x500E,0x500F,0x5010,0x5011,0x5012,
                                                 0x5013, 0x5014, 0x5015, 0x5016, 0x5017, 0x5018, 0x5019,0x501A,0x501B, 0x501C, 0x501D,

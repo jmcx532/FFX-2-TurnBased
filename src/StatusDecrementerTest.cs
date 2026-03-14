@@ -56,7 +56,7 @@ public unsafe class StatusDecrementerModule : FhModule {
     private readonly FhMethodHandle<delta_fx> _delta_fx_handle;
 
     public StatusDecrementerModule() {
-        int addr_offset = 0x400000;
+        //int addr_offset = 0x400000;
 
         //_logger = new FhLogger($"{FhUtil.get_timestamp_string()}_TurnBased.log");
         _status_time_handler = new FhMethodHandle<status_time_decrementer>(this, "FFX-2.exe", 0x236ca0, h_status_time_handler);
