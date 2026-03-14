@@ -4,10 +4,13 @@
  *
  * 'global using' are project-scoped. They do not leak outside of your mod's source.
  */
-
+global using System;
 global using System.IO;
+global using System.Linq;
+global using System.Numerics;
 global using System.Runtime.InteropServices;
 global using System.Collections.Generic;
+
 
 global using Hexa.NET.ImGui;
 
