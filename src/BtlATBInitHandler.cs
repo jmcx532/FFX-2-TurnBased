@@ -3,57 +3,53 @@
  * Sets ATB to 0 for pre-emptive strikes normally
  */
 
-namespace Fahrenheit.Modules.PreEmptiveHandler;
-
-//function delegates
-//618b80 -- checks DAT_DF94a5 - (is 1 on premptive)(Need to check if its 2 on ambush, 0 normal) and processes
-//ALWAYS RUNS ON BATTLE START
-[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-public delegate int process_btl_init_state();
-
-//6348a0 - writes the ATB progress remaining when there is a pre-emptive strike (Maybe ambush too) (called by the previous function)
-//ONLY CALLED IF THERE IS PREEMPTIVE STRIKE / Ambush - not on normal start
-[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-public delegate int preemptive_atb_writer(byte chr_id, int param_2);
-
-//634730
-[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-public delegate uint first_strike(int chr_base_address, int param_2, int param_3);
-
-//611450
-[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-public delegate int get_chr_addr(uint chr_id);
-
-//625160 
-/* this function returns a base address for a command as far as the scope of ATB recovery time is concerned.
- * In reality, it checks a whole range of things, commands (item, command, monmagic), auto-abilities, Garment Grids*/
-[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-public unsafe delegate int get_cmd_addr(uint command_id, int* param_2);
-
-[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-public delegate int alpha_fx(int param_1, int param_2);
-[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-public delegate uint bravo_fx(int param_1);
-[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-public delegate int charlie_fx(byte param_1);
-[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-public delegate int delta_fx(uint param_1);
-
-
+namespace Fahrenheit.Modules.FFX2TurnBased;
 
 [FhLoad(FhGameId.FFX2)]
 public unsafe class PreEmptiveModule : FhModule {
     protected readonly FhLogger _logger;
-    
+
+    //function delegates
+    //618b80 -- checks DAT_DF94a5 - (is 1 on premptive)(Need to check if its 2 on ambush, 0 normal) and processes
+    //ALWAYS RUNS ON BATTLE START
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate int process_btl_init_state();
+
+    //6348a0 - writes the ATB progress remaining when there is a pre-emptive strike (Maybe ambush too) (called by the previous function)
+    //ONLY CALLED IF THERE IS PREEMPTIVE STRIKE / Ambush - not on normal start
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate int preemptive_atb_writer(byte chr_id, int param_2);
+
+    //634730
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate uint first_strike(int chr_base_address, int param_2, int param_3);
+
+    //611450
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate int get_chr_addr(uint chr_id);
+
+    //625160 
+    /* this function returns a base address for a command as far as the scope of ATB recovery time is concerned.
+     * In reality, it checks a whole range of things, commands (item, command, monmagic), auto-abilities, Garment Grids*/
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public unsafe delegate int get_cmd_addr(uint command_id, int* param_2);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate int alpha_fx(int param_1, int param_2);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate uint bravo_fx(int param_1);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate int charlie_fx(byte param_1);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate int delta_fx(uint param_1);
+
     //actually writes the ATB value on preemptive strike - called by init_atb_progress
     private readonly FhMethodHandle<preemptive_atb_writer> _preemptive_handle;
     //checks DAT_DF94a5 - this is 1 on pre-emptive strike (may be 0 normally and 2 on ambush? - need to check
     //parent function of preemptive_fx
     private readonly FhMethodHandle<process_btl_init_state> _btl_init_state_handle;
-
     //first strike handling - 634730
     private readonly FhMethodHandle<first_strike> _first_strike_handle;
-
     //gets character base address
     private readonly FhMethodHandle<get_chr_addr> _get_chr_addr;
     //used to get commands base address, can be used for auto abilites and Garment Grids maybe

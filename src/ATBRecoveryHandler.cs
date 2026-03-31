@@ -6,34 +6,32 @@
  * as the Charge Time mechanic was removed.
  */
 
-using TerraFX.Interop.Windows;
-using static Fahrenheit.Core.FFX.Battle.ChrRam;
-
-namespace Fahrenheit.Modules.ATBRecoveryHandler;
-
-//function delegates
-//634140
-[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-public delegate int atb_recov_calc(uint chr_id, uint command_id);
-[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-//6401c0
-public delegate uint atb_rec_writer(uint chr_id, int param_2, int param_3);
-
-//611450
-[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-public delegate int get_chr_addr(uint chr_id);
-//625160 
-/* this function returns a base address for a command as far as the scope of ATB recovery time is concerned.
- * In reality, it checks a whole range of things, commands (item, command, monmagic), auto-abilities, Garment Grids*/
-[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-public unsafe delegate int get_cmd_base_addr(uint command_id, int *param_2);
-//624cd0
-[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-public delegate int clamp_between(int param_1, int param_2, int param_3);
+namespace Fahrenheit.Modules.FFX2TurnBased;
 
 [FhLoad(FhGameId.FFX2)]
 public unsafe class ATBRecoveryModule : FhModule {
     protected readonly FhLogger _logger;
+
+    //function delegates
+    //634140
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate int atb_recov_calc(uint chr_id, uint command_id);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    //6401c0
+    public delegate uint atb_rec_writer(uint chr_id, int param_2, int param_3);
+
+    //611450
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate int get_chr_addr(uint chr_id);
+    //625160 
+    /* this function returns a base address for a command as far as the scope of ATB recovery time is concerned.
+     * In reality, it checks a whole range of things, commands (item, command, monmagic), auto-abilities, Garment Grids*/
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public unsafe delegate int get_cmd_base_addr(uint command_id, int* param_2);
+    //624cd0
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate int clamp_between(int param_1, int param_2, int param_3);
+
     private readonly FhMethodHandle<atb_recov_calc>_atb_recovery_handle;
     private readonly FhMethodHandle<atb_rec_writer> _atb_rec_writer_handle;
     private readonly FhMethodHandle<get_chr_addr> _chr_addr_handle;

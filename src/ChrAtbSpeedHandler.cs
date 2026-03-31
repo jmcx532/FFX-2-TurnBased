@@ -9,7 +9,7 @@
  * chr_base_addr + 0x9F0 ()
  * 
  */
-namespace Fahrenheit.Modules.ChrAtbSpeedHandler;
+namespace Fahrenheit.Modules.FFX2TurnBased;
 
 [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
 //main speed function and parameters

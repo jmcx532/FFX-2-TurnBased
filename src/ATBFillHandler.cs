@@ -1,43 +1,6 @@
 ﻿// SPDX-License-Identifier: MIT
-using System;
-namespace Fahrenheit.Modules.ATBFillHandler;
 
-//delegates
-[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-//634b40 - atb function and parameters - this handles ATB timer counting down and more
-public unsafe delegate int atb_fx(byte chr_id, int chr_base_address, int* param_3, int param_4);
-//Sub-Functions
-//644bb0
-[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-public unsafe delegate int alpha_fx(int* param_1, uint param_2, int* param_3, int* param_4);
-
-/*634b00 - this function checks some character values including their ATB tick down speed
-*pseudo checks for Stop (i.e their tick down value is 0 but Sleep/Petrify/Stop are better covered
-in the ChrAtbSpeedHandler*/
-[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-public delegate int bravo_fx(int param_1);
-
-//61c290 - oversoul handling
-[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-public delegate int oversoul_fx(uint param_1);
-
-//636900 - seems to do status checks if user had used Warriors Sentinel
-[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-public delegate int delta_fx(byte param_1);
-
-//636400
-[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-public delegate int echo_fx(byte param_1);
-//634390 - checks if Control Creatures and Control Enemy debug flags are set
-[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-public delegate int foxtrot_fx(byte param_1);
-//636360
-[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-public delegate int golf_fx(byte param_1);
-
-//get_chr_addr FUN_00611450
-[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-public delegate int get_chr_addr(uint param_1);
+namespace Fahrenheit.Modules.FFX2TurnBased;
 
 [FhLoad(FhGameId.FFX2)]
 public unsafe class ATBFillModule : FhModule {
@@ -45,6 +8,43 @@ public unsafe class ATBFillModule : FhModule {
     int addr_offset = 0x400000;
 
     protected readonly FhLogger _fill_logger;
+
+    //delegates
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    //634b40 - atb function and parameters - this handles ATB timer counting down and more
+    public unsafe delegate int atb_fx(byte chr_id, int chr_base_address, int* param_3, int param_4);
+    //Sub-Functions
+    //644bb0
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public unsafe delegate int alpha_fx(int* param_1, uint param_2, int* param_3, int* param_4);
+
+    /*634b00 - this function checks some character values including their ATB tick down speed
+    *pseudo checks for Stop (i.e their tick down value is 0 but Sleep/Petrify/Stop are better covered
+    in the ChrAtbSpeedHandler*/
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate int bravo_fx(int param_1);
+
+    //61c290 - oversoul handling
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate int oversoul_fx(uint param_1);
+
+    //636900 - seems to do status checks if user had used Warriors Sentinel
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate int delta_fx(byte param_1);
+
+    //636400
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate int echo_fx(byte param_1);
+    //634390 - checks if Control Creatures and Control Enemy debug flags are set
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate int foxtrot_fx(byte param_1);
+    //636360
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate int golf_fx(byte param_1);
+
+    //get_chr_addr FUN_00611450
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate int get_chr_addr(uint param_1);
 
     //main function
     private readonly FhMethodHandle<atb_fx> _atb_fx_handle;
@@ -124,6 +124,8 @@ public unsafe class ATBFillModule : FhModule {
 
 
         iVar2 = chr_base_address;//local copy seemingly necessary for it not to crash on h_bravo_fx
+
+        
 
         //checks some flags and returns early if they're set as below
         if (((chr_base_address == 0) || (*(byte*)(chr_base_address + 0x1789) == 0)) ||
@@ -260,7 +262,6 @@ public unsafe class ATBFillModule : FhModule {
         int[] can_fill_array = new int[31];
         //an array to hold each characters time until ATB full value
         int[] atb_timer_values = new int[31];
-        
 
         //fill up arrays
         for (int i = 0; i < can_fill_array.Length; i++) {

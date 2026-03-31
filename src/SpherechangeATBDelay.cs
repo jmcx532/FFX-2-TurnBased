@@ -1,19 +1,18 @@
 ﻿// SPDX-License-Identifier: MIT
 
-namespace Fahrenheit.Modules.SpherechangeATBDelay;
-
-[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-public delegate int get_chr_addr(uint chr_id);
-
-//6401c0 - this writes ATB values after a command is used
-[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-public delegate uint atb_writer(byte arg_1, int arg_2/*not used*/, int arg_3);
+namespace Fahrenheit.Modules.FFX2TurnBased;
 
 [FhLoad(FhGameId.FFX2)]
 public class SpherechangeATBDelay : FhModule {
     //protected readonly FhLogger _SClogger;
 
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate int get_chr_addr(uint chr_id);
     private readonly FhMethodHandle<get_chr_addr> _get_chr_addr;
+
+    //6401c0 - this writes ATB values after a command is used
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate uint atb_writer(byte arg_1, int arg_2/*not used*/, int arg_3);
     private readonly FhMethodHandle<atb_writer> _atb_writer;
 
     public SpherechangeATBDelay() {

@@ -5,6 +5,7 @@
  * 
  */
 
+namespace Fahrenheit.Modules.FFX2TurnBased;
 
 [FhLoad(FhGameId.FFX2)]
 public unsafe class StatusProcessModule : FhModule {
@@ -121,6 +122,20 @@ public unsafe class StatusProcessModule : FhModule {
         return _MsMotionRecoverExe_handle.orig_fptr.Invoke(chr_id, param_2);
     }
 
+    public uint ChrIdOfWhoHasTurn() {
+        for (uint i = 0; i < 0x1f; i++) {
+            int test_chr_base = h_MsGetChr(i);
+            byte actual_unit = *(byte*)(test_chr_base + 0x1784);
+            int remaining_hp = *(int*)(test_chr_base + 0x3b4);
+            int atb_remaining = *(int*)(test_chr_base + 0x9d8);
+
+            if (atb_remaining < 1 && actual_unit == 1 && remaining_hp > 0) {
+                return i;
+            } 
+        }
+        return 0xffffffff;
+    }
+
     public unsafe void h_MsStatusProcess() {
         short sVar1;
         int chr_base;
@@ -143,14 +158,19 @@ public unsafe class StatusProcessModule : FhModule {
         int local_28;
         uint chr_id;
         /*byte[] local_1c [4]; -- original Ghidra decomp */
-        byte[] local_1c = new byte[0x14];
+        //byte[] local_1c = new byte[0x14]; - moved locally to PSN/Regen handling
         uint local_18;
         int local_14;
         uint local_8;
         uint ChrSpeedVal4;
 
+        byte wait_mode_flag_value = FhUtil.get_at<byte>(0x9F8817);
 
-        chr_id = 0;// Replace this line with who has current turn calculation
+        if (wait_mode_flag_value == 1) { return; }
+
+        chr_id = 0;
+        //chr_id = ChrIdOfWhoHasTurn();
+        //if (chr_id == 0xFFFFFFFF) return;
 
         chr_base = h_MsGetChr(chr_id);// Get Chr base address
 
@@ -197,7 +217,7 @@ public unsafe class StatusProcessModule : FhModule {
                 do {
                     if (((uVar7 >> ((byte)iVar4 & 0x1f) & 1) != 0) && (0 < *piVar8)) {
 
-                        iVar5 = (int)(*piVar8 - ChrSpeedVal4);// compute status time remaining
+                        iVar5 = *piVar8 - (int)ChrSpeedVal4;// compute status time remaining
 
                         //if status has expired
                         if (iVar5 < 0) {
@@ -213,7 +233,8 @@ public unsafe class StatusProcessModule : FhModule {
                         *piVar8 = iVar5;// write the updates value
                     }
                     //uVar3 = uVar3 << 1 | (uint)((int)uVar3 < 0);
-                    uVar3 = (uVar3 << 1) | ((uVar3 & 0x80000000) >> 31); // commented line replaced with this
+                    //uVar3 = (uVar3 << 1) | ((uVar3 & 0x80000000) >> 31); 
+                    uVar3 = (uVar3 << 1) | (uint)((int)uVar3 < 0 ? 1 : 0);// commented line replaced with this
 
                     iVar4 = iVar4 + 1;// increase iterator
                     piVar8 = piVar8 + 1;// increase offset to next status
@@ -223,7 +244,7 @@ public unsafe class StatusProcessModule : FhModule {
             }
 
 
-            iVar4 = _MsATBActiveCheck_handle.orig_fptr.Invoke(chr_id, 7);//633f90
+            iVar4 = h_MsATBActiveCheck(chr_id, 7);//633f90
             if (iVar4 != 0) {
                 local_30 = (short*)(chr_base + 0x4cc);// ???
 
@@ -231,9 +252,9 @@ public unsafe class StatusProcessModule : FhModule {
                 do {
                     //start of 2nd set of Chr status timers - sbyte Count statuses - base + incrementer offset to select which status timer
                     iVar5 = (int)*(byte*)(chr_base + 0x4b4 + iVar4);// Reads the time remaining value
-                    
+
                     uVar3 = (uint)iVar5 - 1;// decremented timer value
-                    //If time remaining value is less than 0x7d (127 or 0x7f is used for Auto-Haste, Auto-xxxxx)
+                    //If time remaining value is less than 0x7d (126 or 0x7e is used for Auto-Haste, Auto-xxxxx)
                     if (uVar3 < 125) {
 
                         //Block for statuses that use rom.bin->count_value - ? and Doom
@@ -256,7 +277,8 @@ public unsafe class StatusProcessModule : FhModule {
                         local_48 = (uint)bVar10;
                         if (((int)(uint)bVar10 < iVar5) && (iVar9 != 0)) */
                         //if count_value not 0, ?, or has time remaining
-                        if (iVar9 != 0 && (!bVar10 || iVar5 > 1)) {
+                        
+                        if (iVar9 != 0 && iVar5 > (bVar10 ? 1 : 0)) {
                             uVar6 = ChrSpeedVal3;
 
                             /*
@@ -274,7 +296,8 @@ public unsafe class StatusProcessModule : FhModule {
 
 
                             //sVar1 = *local_30 + (short)uVar6;
-                            sVar1 = (short)(*local_30 + (short)uVar6);
+                            //sVar1 = (short)(*local_30 + (short)uVar6);
+                            sVar1 = (short)(*local_30 + (int)uVar6);
 
                             *local_30 = sVar1;
                             /* something, and If chr not stopped
@@ -299,80 +322,93 @@ public unsafe class StatusProcessModule : FhModule {
                     iVar4 = iVar4 + 1;// increment iterator
                 } while (iVar4 < 0x18);// xxx_status2 arrays have 0x18 sbytes
 
+                //Poison Handling
+                bool isPoisoned = (*(uint*)(chr_base + 0x434) >> 5 & 1) == 1;// check poison state
+                if (isPoisoned) {
+                    piVar8 = (int*)(chr_base + 0x684);// Get pointer to Chr poison accumulator time value
+                    *piVar8 = *piVar8 + (int)ChrSpeedVal3;//Write or increase the accumulator by the Chrs Speed Value
+                    int psn_accumulator_val = *(int*)(chr_base + 0x684);// Read the updated accumulator
 
+                    // If the accumulator value is greater than the threshold value
+                    if (*(int*)(chr_base + 0x68c) < psn_accumulator_val) {
+                        int psn_damage_amount = 0;
+                        // Accumulator value is written as: previously read accumulator value - the threshold value
+                        *(int*)(chr_base + 0x684) = psn_accumulator_val - *(int*)(chr_base + 0x68c);
 
-                // Poison and Regen handling
-                iVar4 = 0;//iterator - 0: Poison handling, 1: Regen Handling
-                do {
-                    if (iVar4 == 0) {
-                        psn_or_regen_state = *(uint*)(chr_base + 0x434) >> 5 & 1;// check poison state
-                    LAB_00637101:
-                        if (psn_or_regen_state != 0) { // If poisoned or under Regen - Regen state is part of the IF ELSE block
-                            piVar8 = (int*)(chr_base + 0x684 + iVar4 * 4);// Read the Chrs Poison/regen time accumulator value
-                            *piVar8 = *piVar8 + (int)ChrSpeedVal3;//Write or increase the accumulator by the Chrs Speed Value
-                            iVar5 = *(int*)(chr_base + 0x684 + iVar4 * 4);// Read the updated accumulator
-                                                                           
-                            // If the accumulator value is greater than the threshold value
-                            if (*(int*)(chr_base + 0x68c + iVar4 * 4) < iVar5) {
-                                psn_or_regen_amount = 0;
-                                *(int*)(chr_base + 0x684 + iVar4 * 4) = iVar5 - *(int*)(chr_base + 0x68c + iVar4 * 4);// Accumulator value is the previously read accumulator value - the threshold value
-                                // If is Poison being handles
-                                if (iVar4 == 0) {
-                                    /* iVarJ is poison damage number multiplied by (chr max_hp / 256) */
-                                    psn_or_regen_amount = (*(int*)(chr_base + 0x694) * *(int*)(chr_base + 0x384)) >> 8; // Poison Dmg Calc: (X/256) * MaxHP
-                                }
-                                else {
-                                    // If regen being handled
-                                    if (iVar4 == 1) {
-                                        //psn_or_regen_amount = -((uint)(*(int*)(chr_base + 0x698) * *(int*)(chr_base + 0x384)) >> 8);
-                                        
-                                        //Regen formula (x/256) * Max HP ----- made negative to heal not damage
-                                        uint chr_regen_numerator = *(uint*)(chr_base + 0x698);
-                                        int chr_max_hp =  *(int*)(chr_base + 0x384);
+                        //psn_damage_amount = (*(int*)(chr_base + 0x694) * *(int*)(chr_base + 0x384)) >> 8; // Poison Dmg Calc: (X/256) * MaxHP
+                        psn_damage_amount = (*(int*)(chr_base + 0x694) / 256) * *(int*)(chr_base + 0x384);
 
-                                        psn_or_regen_amount = -(int)(chr_regen_numerator / 256) * chr_max_hp;
+                        byte[] local_1c_psn = new byte[0x14];
 
-                                    }
-                                }
+                        fixed (byte* pLocal1cPSN = local_1c_psn) {
+                            h_MsStructClear(pLocal1cPSN, 0x14);//62a0f0
+                            local_18 = 0x100ff;
+                            local_1c_psn[0] = (byte)chr_id;
+                            local_14 = psn_damage_amount;
+                            h_MsDamageBufferExe(chr_id, chr_id, pLocal1cPSN);//6422d0
 
-                                h_MsStructClear(local_1c, 0x14);//62a0f0
-                                local_18 = 0x100ff;
-                                local_1c[0] = (byte)chr_id;
-                                local_14 = psn_or_regen_amount;
-                                h_MsDamageBufferExe(chr_id, chr_id, local_1c);//6422d0
-                                break;
-                            }
                         }
                     }
-                    else if (iVar4 == 1) {
-                        psn_or_regen_state = (uint)*(byte*)(chr_base + 0x43b); // is equal to Chr regen timer value
-                        goto LAB_00637101;
+                }
+                //Regen Handling
+                uint regen_time_left = (uint)*(byte*)(chr_base + 0x43b); // is equal to Chr regen timer value
+                if (regen_time_left != 0) {
+                    piVar8 = (int*)(chr_base + 0x688);// Get pointer to Chrs Regen time accumulator value
+                    *piVar8 = *piVar8 + (int)ChrSpeedVal3;// Write or increase the accumulator by the Chrs Speed Value
+                    int regen_accumulator_val = *(int*)(chr_base + 0x688);// Read the updated accumulator
+
+                    // If the accumulator value is greater than the threshold value
+                    if (*(int*)(chr_base + 0x690) < regen_accumulator_val) {
+
+                        int regen_amount = 0;
+                        // Accumulator value is written: previously read accumulator value - the threshold value
+                        *(int*)(chr_base + 0x688) = regen_accumulator_val - *(int*)(chr_base + 0x690);
+
+                        //Regen formula (x/256) * Max HP ----- made negative to heal not damage
+                        uint chr_regen_numerator = *(uint*)(chr_base + 0x698);
+                        int chr_max_hp =  *(int*)(chr_base + 0x384);
+
+                        regen_amount = -(int)(chr_regen_numerator / 256) * chr_max_hp;
+
+
+                        byte[] local_1c_rgn = new byte[0x14];
+
+                        fixed (byte* pLocal1cRGN = local_1c_rgn) {
+                            h_MsStructClear(pLocal1cRGN, 0x14);//62a0f0
+                            local_18 = 0x100ff;
+                            local_1c_rgn[0] = (byte)chr_id;
+                            local_14 = regen_amount;
+                            h_MsDamageBufferExe(chr_id, chr_id, pLocal1cRGN);//6422d0
+                        }
+
                     }
-                    iVar4 = iVar4 + 1;
-                } while (iVar4 < 2);
+                }
+
+                if (local_2c != 0) {
+                    /* Status timer decrementer */
+                    h_MsSetStatus(chr_id, 0xff, 1, 1);//636ca0
+                    h_MsSetChrWeak(chr_id, 0xffffffff);//61b080
+                }
+
+                int iVar6;
+                if (local_28 == 0) {
+                    iVar6 = 0;
+                }
+                else {
+                    iVar6 = 2;
+                    h_MsStatusEffectCheck((byte)chr_id);//623290
+                }
+                if (local_38 == 0) {
+                    if (iVar6 == 0) { return; }
+                    ;
+                }
+                else {
+                    iVar6 = 0xc;
+                }
+                h_MsMotionRecoverExe(chr_id, iVar6);//6330e0
             }
-            if (local_2c != 0) {
-                /* Status timer decrementer */
-                h_MsSetStatus(chr_id, 0xff, 1, 1);//636ca0
-                h_MsSetChrWeak(chr_id, 0xffffffff);//61b080
-            }
-            if (local_28 == 0) {
-                chr_base = 0;
-            }
-            else {
-                chr_base = 2;
-                h_MsStatusEffectCheck((byte)chr_id);//623290
-            }
-            if (local_38 == 0) {
-                if (chr_base == 0) goto LAB_006371da;
-            }
-            else {
-                chr_base = 0xc;
-            }
-            h_MsMotionRecoverExe(chr_id, chr_base);//6330e0
+            return;
         }
-    LAB_006371da:
-        return;
     }
 
 

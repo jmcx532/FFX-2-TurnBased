@@ -9,7 +9,7 @@
  * 
  */
 
-namespace Fahrenheit.Modules.BugCausersModule;
+namespace Fahrenheit.Modules.FFX2TurnBased;
 
 [FhLoad(FhGameId.FFX2)]
 public unsafe class BugCausersModule : FhModule {
