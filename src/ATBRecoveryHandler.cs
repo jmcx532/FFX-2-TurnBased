@@ -198,9 +198,9 @@ public unsafe class ATBRecoveryModule : FhModule {
         uint command_used = (uint)*(ushort*)(param_3 + 0xa4);
 
         //update character's Poison accumulator
-        _logger.Info("Poison accumulator updated");
-        nint chr_base_address = h_get_chr_addr(chr_id);
-        *(int*)(chr_base_address + 0x684) = 16001;
+        //_logger.Info("Poison accumulator updated");
+        //nint chr_base_address = h_get_chr_addr(chr_id);
+        //*(int*)(chr_base_address + 0x684) = 16001;
 
         /* always set their their +0xEC2 flag to 1 after acting - could maybe replace WaitFlagWriter exception commands? --> Nope
         if (chr_id < 3) {
