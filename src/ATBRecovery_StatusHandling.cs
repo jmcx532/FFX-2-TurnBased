@@ -1,17 +1,14 @@
 ﻿// SPDX-License-Identifier: MIT
 
-/* This partial class fits in with ATBFillHandler.cs
+/* This partial class fits in with ATBRecovery_Main.cs
  * This class re-implements X-2's status handling through stubbing out MsStatusProcess
  * which is called continuously, and it's behaviour is replicated in another function
- * that can be called once at the appropriate time when ATB is full, process statuses
+ * that can be called once at the appropriate time and process statuses
  * 
  */
 
-using TerraFX.Interop.Windows;
-using TerraFX.Interop.WinRT;
-
 namespace Fahrenheit.Modules.FFX2TurnBased;
-public unsafe partial class ATBFillModule : FhModule {
+public unsafe partial class ATBRecoveryModule : FhModule {
 
     // Delegates
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -66,16 +63,15 @@ public unsafe partial class ATBFillModule : FhModule {
     private readonly FhMethodHandle<MsMotionRecoverExe> _MsMotionRecoverExe_handle;
 
 
-    /* This part is in ATBFillHandler.cs
-    
-    public ATBFillModule() { 
+    /* This part is in ATBFRecovery_Main.cs
+    public ATBRecoveryModule() { 
     
     }
-
     */
 
+    // DamageBuffer struct used for Poison/Regen
     [StructLayout(LayoutKind.Explicit, Size = 0x14)]
-    public struct StatusDamageBuffer {
+    public struct DamageBuffer {
         [FieldOffset(0x00)] public int chr_id;
         [FieldOffset(0x04)] public ushort unk1;
         [FieldOffset(0x06)] public ushort unk2;
@@ -86,7 +82,7 @@ public unsafe partial class ATBFillModule : FhModule {
 
 
     // Turn-based status handling 
-    public void TbStatusProcess() {
+    public void TbStatusProcess(uint chr_id) {
         uint ChrSpeedVal2;
         uint ChrSpeedVal3;
         uint ChrSpeedVal4;
@@ -104,14 +100,16 @@ public unsafe partial class ATBFillModule : FhModule {
         uint uVar6;
         short sVar1;
         uint local_48;
-        uint local_18;
-        int local_14;
+        //uint local_18;
+        //int local_14;
         /*byte[] local_1c [4]; -- original Ghidra decomp */
         //byte[] local_1c = new byte[0x14]; - moved locally to PSN/Regen handling
 
-
+        /* Old, start of turn status handling
         uint chr_id = ChrIdOfWhoHasTurn();// get chr_id of who has the turn
         if (chr_id == 0xffffffff) {  return; }// if valid chr_id not returned, abort
+        */
+
         int chr_base = h_MsGetChr(chr_id);
 
         //status handling
@@ -155,7 +153,7 @@ public unsafe partial class ATBFillModule : FhModule {
                     if (iVar5 < 0) {
                         local_2c = local_2c + 1;
                         local_28 = local_28 + 1;
-                        iVar5 = 0;
+                        //iVar5 = 0;
                         if ((uVar7 & 4) != 0) {
                             local_38 = local_38 + 1;
                         }
@@ -171,6 +169,7 @@ public unsafe partial class ATBFillModule : FhModule {
                 iVar4 = iVar4 + 1;// increase iterator
                 piVar8 = piVar8 + 1;// increase offset to next status
             } while (iVar4 < 0x18);
+
 
             *(uint*)(chr_base + 0x450) = uVar7;// write the character's updated status bitfield
 
@@ -268,8 +267,8 @@ public unsafe partial class ATBFillModule : FhModule {
 
 
                     //byte[] local_1c_psn = new byte[0x14];
-                    StatusDamageBuffer psn_buffer = new();
-                    StatusDamageBuffer* pBuffer = &psn_buffer;
+                    DamageBuffer psn_buffer = new();
+                    DamageBuffer* pBuffer = &psn_buffer;
 
                     h_MsStructClear(pBuffer, 0x14);//62a0f0
                     //local_18 = 0x100ff;
@@ -283,43 +282,6 @@ public unsafe partial class ATBFillModule : FhModule {
                     h_MsDamageBufferExe(chr_id, chr_id, pBuffer);//6422d0
 
                     
-                }
-            }
-            //Regen Handling
-            uint regen_time_left = (uint)*(byte*)(chr_base + 0x43b); // is equal to Chr regen timer value
-            if (regen_time_left != 0) {
-                piVar8 = (int*)(chr_base + 0x688);// Get pointer to Chrs Regen time accumulator value
-                *piVar8 = *piVar8 + (int)ChrSpeedVal3;// Write or increase the accumulator by the Chrs Speed Value
-                int regen_accumulator_val = *(int*)(chr_base + 0x688);// Read the updated accumulator
-
-                // If the accumulator value is greater than the threshold value
-                if (*(int*)(chr_base + 0x690) < regen_accumulator_val) {
-
-                    int regen_amount = 0;
-
-                    // Accumulator value is written: previously read accumulator value - the threshold value
-                    *(int*)(chr_base + 0x688) = regen_accumulator_val - *(int*)(chr_base + 0x690);
-
-                    //Regen formula (x/256) * Max HP ----- made negative to heal not damage
-                    uint chr_regen_numerator = *(uint*)(chr_base + 0x698);
-                    int chr_max_hp =  *(int*)(chr_base + 0x384);
-
-                    regen_amount = -(int)((chr_regen_numerator / 256.0) * chr_max_hp);
-
-                    //create new StatusDamageBuffer and get pointer for next 2 function calls
-                    StatusDamageBuffer rgn_buffer = new();
-                    StatusDamageBuffer* rBuffer = &rgn_buffer;
-
-                    h_MsStructClear(rBuffer, 0x14);//62a0f0
-                    //local_18 = 0x100ff;
-                    rgn_buffer.unk1 = 0xff;
-                    rgn_buffer.unk2 = 0x01;
-                    //local_1c[0] = (byte)chr_id;
-                    rgn_buffer.chr_id = (byte)chr_id;
-                    //local_14 = psn_damage_amount;
-                    rgn_buffer.damage_amount = regen_amount;
-
-                    h_MsDamageBufferExe(chr_id, chr_id, rBuffer);//6422d0
                 }
             }
 
@@ -352,6 +314,84 @@ public unsafe partial class ATBFillModule : FhModule {
         }
     }//TbStatusProcess END
 
+    // Regen to process for either all enemies or all allies at the end of the turn
+    public void TbRegenProcess() {
+        uint ChrSpeedVal2;
+        uint ChrSpeedVal3;
+        uint ChrSpeedVal4;
+        uint uVar3;
+        int* piVar8;
+
+        uint chr_id = 0;
+        
+        do {
+            int chr_base = h_MsGetChr(chr_id);// Get Chr base address
+            // Checks character is active, ?, has HP remaining, some chr state flag and if not petrified
+            if ((((*(byte*)(chr_base + 0x1784) != 0) && (*(byte*)(chr_base + 0x1792) == 0)) && (0 < *(int*)(chr_base + 0x3b4))) &&
+               ((*(byte*)(chr_base + 0x1787) == 0 && ((*(byte*)(chr_base + 0x434) & 2) == 0)))) {
+
+                // read the character's speed values
+                ChrSpeedVal2 = *(uint*)(chr_base + 0x9e8);
+                ChrSpeedVal3 = *(uint*)(chr_base + 0x9ec);
+                ChrSpeedVal4 = *(uint*)(chr_base + 0x9f0);
+
+                //6430f0 
+                uVar3 = h_MsStatCheckStop((byte)chr_id, 0);// Gets a small bitfield that has bits set if character is asleep, petrified or stopped
+
+                  // If under sleep/pet/stop - manipulate speed values - 0 ATB Fill, conditional anim modifier - sleep doesn't freeze, the other two do
+                if (uVar3 != 0) {
+                    if ((uVar3 & 0xFFFFFFFB) != 0) {
+                        ChrSpeedVal3 = 0;
+                    }
+                    ChrSpeedVal2 = 0;
+                }
+
+                //Regen Handling
+                uint regen_time_left = (uint)*(byte*)(chr_base + 0x43b); // is equal to Chr regen timer value
+                if (regen_time_left != 0) {
+                    piVar8 = (int*)(chr_base + 0x688);// Get pointer to Chrs Regen time accumulator value
+                    *piVar8 = *piVar8 + (int)ChrSpeedVal3;// Write or increase the accumulator by the Chrs Speed Value
+                    int regen_accumulator_val = *(int*)(chr_base + 0x688);// Read the updated accumulator
+
+                    // If the accumulator value is greater than the threshold value
+                    if (*(int*)(chr_base + 0x690) < regen_accumulator_val) {
+
+                        int regen_amount = 0;
+
+                        // Accumulator value is written: previously read accumulator value - the threshold value
+                        *(int*)(chr_base + 0x688) = regen_accumulator_val - *(int*)(chr_base + 0x690);
+
+                        //Regen formula (x/256) * Max HP ----- made negative to heal not damage
+                        uint chr_regen_numerator = *(uint*)(chr_base + 0x698);
+                        int chr_max_hp =  *(int*)(chr_base + 0x384);
+
+                        regen_amount = -(int)((chr_regen_numerator / 256.0) * chr_max_hp);
+
+                        //create new DamageBuffer and get pointer for next 2 function calls
+                        DamageBuffer rgn_buffer = new();
+                        DamageBuffer* rBuffer = &rgn_buffer;
+
+                        h_MsStructClear(rBuffer, 0x14);//62a0f0
+                                                       //local_18 = 0x100ff;
+                        rgn_buffer.unk1 = 0xff;
+                        rgn_buffer.unk2 = 0x01;
+                        //local_1c[0] = (byte)chr_id;
+                        rgn_buffer.chr_id = (byte)chr_id;
+                        //local_14 = psn_damage_amount;
+                        rgn_buffer.damage_amount = regen_amount;
+
+                        h_MsDamageBufferExe(chr_id, chr_id, rBuffer);//6422d0
+                    }
+                }
+
+            }
+
+            chr_id = chr_id + 1;
+            if (0x1e < chr_id) { return; }
+        } while (true);
+    }
+
+    /*
     public uint ChrIdOfWhoHasTurn() {
         for (uint i = 0; i < 0x1f; i++) {
             int test_chr_base = h_MsGetChr(i);
@@ -364,10 +404,10 @@ public unsafe partial class ATBFillModule : FhModule {
             }
         }
         return 0xffffffff;
-    }
+    }*/
 
     // Hooked function handling
-    //stub out the original function
+    //MsStatusProcess now only handles Sleep and Stop
     public void h_MsStatusProcess() {
         return;
     }
@@ -407,7 +447,7 @@ public unsafe partial class ATBFillModule : FhModule {
     }
 
 
-    // init and local_state handled in ATBFillHandler.cs
+    // init and local_state handled in ATBRecovery_Main.cs
 
 
 }
