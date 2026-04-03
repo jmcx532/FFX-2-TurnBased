@@ -1,8 +1,5 @@
 ﻿// SPDX-License-Identifier: MIT
 
-
-using TerraFX.Interop.Windows;
-
 namespace Fahrenheit.Modules.FFX2TurnBased;
 
 //function delegates

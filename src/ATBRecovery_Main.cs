@@ -33,18 +33,26 @@ public unsafe partial class ATBRecoveryModule : FhModule {
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate int clamp_between(int param_1, int param_2, int param_3);
 
+    //6341a0
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate int MsATBgetThinkingTime(uint chr_id);
+
+    //756590 - TOBtlDrawATBGaude - NOT a typo
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate void TOBtlDrawATBGaude(int param_1, int param_2, int param_3);
 
     private readonly FhMethodHandle<MsATBgetRestTime>_MsATBgetRestTime_handle;
     private readonly FhMethodHandle<MsCommandComplete> _MsCommandComplete_handle;
     private readonly FhMethodHandle<MsGetChr> _MsGetChr_handle;
     private readonly FhMethodHandle<MsGetComData> _MsGetComData_handle;
     private readonly FhMethodHandle<clamp_between> _clamp_between_handle;
-
-    protected readonly FhLogger _logger;
+    private readonly FhMethodHandle<MsATBgetThinkingTime> _MsATBgetThinkingTime_handle;
+    private readonly FhMethodHandle<TOBtlDrawATBGaude> _TOBtlDrawATBGaude_handle;
+    protected readonly FhLogger recov_logger;
 
     public ATBRecoveryModule() {
         int addr_offset = 0x400000;
-        _logger = new FhLogger($"TurnBased_ATBRecovery.log");
+        recov_logger = new FhLogger($"TurnBased_ATBRecovery.log");
 
         _MsATBgetRestTime_handle = new FhMethodHandle<MsATBgetRestTime>(this, "FFX-2.exe", 0x634140 - addr_offset, h_MsATBgetRestTime);
         _MsCommandComplete_handle = new FhMethodHandle<MsCommandComplete>(this, "FFX-2.exe", 0x6401c0 - addr_offset, h_MsCommandComplete);
@@ -52,6 +60,9 @@ public unsafe partial class ATBRecoveryModule : FhModule {
         _clamp_between_handle = new FhMethodHandle<clamp_between>(this, "FFX-2.exe", 0x624cd0 - addr_offset, h_clamp_between);
 
         _MsGetChr_handle = new FhMethodHandle<MsGetChr>(this, "FFX-2.exe", 0x611450 - addr_offset, h_MsGetChr);
+
+        _MsATBgetThinkingTime_handle = new FhMethodHandle<MsATBgetThinkingTime>(this, "FFX-2.exe", 0x6341a0 - addr_offset, h_MsATBgetThinkingTime);
+        _TOBtlDrawATBGaude_handle = new FhMethodHandle<TOBtlDrawATBGaude>(this, "FFX-2.exe", 0x756590 - addr_offset, h_TOBtlDrawATBGaude);
 
         //status handling - see ATBRecovery_StatusHandling.cs for delegates and FhMethodHandle setup
         _MsStatusProcess_handle = new FhMethodHandle<MsStatusProcess>(this, "FFX-2.exe", 0x636eb0 - addr_offset, h_MsStatusProcess);
@@ -77,11 +88,21 @@ public unsafe partial class ATBRecoveryModule : FhModule {
     //this function returns the base address for various Excel data types
     //param_1 is the command id (e.g 0x3002)
     public unsafe int h_MsGetComData(uint command_id, int* param_2) {
-        //_logger.Info("GET_CMD_ADDR PARAM_1 is:" + param_1.ToString("X"));
+        //recov_logger.Info("GET_CMD_ADDR PARAM_1 is:" + param_1.ToString("X"));
         return _MsGetComData_handle.orig_fptr.Invoke(command_id, param_2);
     }
     public int h_clamp_between(int param_1, int param_2, int param_3) {
         return _clamp_between_handle.orig_fptr.Invoke(param_1, param_2, param_3);
+    }
+    //remove thinking time, used to cause a bug with poison/regen, probably OK now, but don't need this mechanic
+    public int h_MsATBgetThinkingTime(uint chr_id) {
+        int original_result = _MsATBgetThinkingTime_handle.orig_fptr.Invoke(chr_id);
+        //return 0 instead
+        return 0;
+    }
+
+    public void h_TOBtlDrawATBGaude(int param_1, int param_2, int param_3) {
+        _TOBtlDrawATBGaude_handle.orig_fptr.Invoke(param_1, param_2, param_3);
     }
 
     //MAIN FUNCTIONS---------------------------------------------------------------------------------------------------
@@ -92,7 +113,7 @@ public unsafe partial class ATBRecoveryModule : FhModule {
 
         /* Gets the character's base address */
         chr_base_address = h_MsGetChr(chr_id);
-        // FUN_00625160 - Get the commands base address
+        // FUN_00625160 - Get the commands base address, this function can also return other Excel data types
         cmd_base_address = h_MsGetComData(command_id, (int*)(0));
 
         //normal calculation
@@ -100,9 +121,9 @@ public unsafe partial class ATBRecoveryModule : FhModule {
         int cmd_recovery_time = (int)(*(ushort*)(cmd_base_address + 0x22) * 10000);
 
         //divide that by (user's Agility + 1) -- VANILLA
-        uint agility_divisor = (uint)(*(byte*)(chr_base_address + 0x39a)) + 1;
+        //uint agility_divisor = (uint)(*(byte*)(chr_base_address + 0x39a)) + 1;
 
-        /*CUSTOM DIVISOR
+        //CUSTOM DIVISOR
         byte agility = (*(byte*)(chr_base_address + 0x39a));
         double divisor;
         //if agility is over 100, use a stronger taper that means higher agility stats don't reduce recovery time as much.
@@ -116,7 +137,7 @@ public unsafe partial class ATBRecoveryModule : FhModule {
 
         uint agility_divisor = (uint)Math.Round(divisor);
 
-        */
+        
 
         //delay from attacks to be added
         uint accrued_delay = (uint)*(int*)(chr_base_address + 0x9e0);
@@ -138,7 +159,7 @@ public unsafe partial class ATBRecoveryModule : FhModule {
         //auto ability recovery time reduction
         ushort command_used = (*(ushort*)(chr_base_address + 0xf3c));
         int percent_reduction = calc_aa_cmd_recov_reduction(chr_base_address, command_used, (int)cmd_base_address);
-        //_logger.Info("Command charge time percent reduction is: " + percent_reduction);
+        //recov_logger.Info("Command charge time percent reduction is: " + percent_reduction);
 
         //apply auto ability reduction
         calced_recovery = ((100 - percent_reduction) * calced_recovery) / 100;
@@ -220,7 +241,22 @@ public unsafe partial class ATBRecoveryModule : FhModule {
         //Time-trip handling - disable so you can't spam it over and Stop the enemy forever
         if (command_used == 0x31EA) {
             disable_time_Trip();
-            _logger.Info("Disable Time Trip function" + command_used.ToString("X"));
+            //recov_logger.Info("Disable Time Trip function" + command_used.ToString("X"));
+        }
+
+        int chr_base = h_MsGetChr(chr_id);
+        //0xF3C to 0xF3D is the command that character last used, or a DS id on spherechange
+        //if the character changed dressphere
+        if (*(byte*)(chr_base + 0xF3D) == 0x50) {
+            // overwrite ATB time remaining -- simulates a command with atb_cost of 20 - half as much wait as an item
+            byte agility = *(byte*)(chr_base + 0x39a);
+            int atb_length = (20 * 10000) / (agility + 1);
+            if ( *(sbyte*)(chr_base + 0x4b8) > 0) { atb_length = atb_length / 2; }//haste also halves recovery time on spherchange
+            if (*(sbyte*)(chr_base + 0x4b9) > 0) { atb_length = atb_length * 2; }//slow also doubles recovery time on spherchange
+
+            *(int*)(chr_base + 0x9D8) = atb_length;
+            // overwrite ATB timer length
+            *(int*)(chr_base + 0x9DC) = atb_length;
         }
 
         // Status Handling
@@ -253,6 +289,9 @@ public unsafe partial class ATBRecoveryModule : FhModule {
         _MsGetChr_handle.hook();
         _MsGetComData_handle.hook();
         _clamp_between_handle.hook();
+
+        _MsATBgetThinkingTime_handle.hook();
+        _TOBtlDrawATBGaude_handle.hook();
 
         // status handling hooks
         _MsStatusProcess_handle.hook();

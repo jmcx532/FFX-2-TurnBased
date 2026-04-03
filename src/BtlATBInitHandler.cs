@@ -7,7 +7,7 @@ namespace Fahrenheit.Modules.FFX2TurnBased;
 
 [FhLoad(FhGameId.FFX2)]
 public unsafe class PreEmptiveModule : FhModule {
-    protected readonly FhLogger _logger;
+    protected readonly FhLogger btl_init_logger;
 
     //function delegates
     //618b80 -- checks DAT_DF94a5 - (is 1 on premptive)(Need to check if its 2 on ambush, 0 normal) and processes
@@ -63,7 +63,7 @@ public unsafe class PreEmptiveModule : FhModule {
         int addr_offset = 0x400000;
 
 
-        _logger = new FhLogger($"TurnBased_ATB_init_handler.log");
+        btl_init_logger = new FhLogger($"TurnBased_ATB_init_handler.log");
 
         _btl_init_state_handle = new FhMethodHandle<process_btl_init_state>(this, "FFX-2.exe", 0x618b80 - addr_offset, h_init_btl_state);
         _preemptive_handle = new FhMethodHandle<preemptive_atb_writer>(this, "FFX-2.exe", 0x6348a0 - addr_offset, h_preemptive_init);
@@ -91,7 +91,7 @@ public unsafe class PreEmptiveModule : FhModule {
     //this function returns the base address for commands -- AND OTHER EXCEL DATA - look through its sub-functions
     //param_1 is the command id (e.g 0x3002)
     public unsafe int h_get_cmd_addr(uint command_id, int* param_2) {
-        //_logger.Info("GET_CMD_ADDR PARAM_1 is:" + param_1.ToString("X"));
+        //btl_init_logger.Info("GET_CMD_ADDR PARAM_1 is:" + param_1.ToString("X"));
         return _get_cmd_addr_handle.orig_fptr.Invoke(command_id, param_2);
     }
 
@@ -115,7 +115,7 @@ public unsafe class PreEmptiveModule : FhModule {
     //ALWAYS RUNS ON BATTLE START
     public unsafe int h_init_btl_state() {
 
-        _logger.Info("h_init_btl_state function called");
+        btl_init_logger.Info("h_init_btl_state function called");
         //re-enable Psychics Time Trip command - can only use once per battle
         reenable_time_trip();
 
@@ -204,7 +204,7 @@ public unsafe class PreEmptiveModule : FhModule {
     //function to re-enable Psychics Time Trip command
     public void reenable_time_trip() {
 
-        _logger.Info("Re-enable Time Trip Function");
+        btl_init_logger.Info("Re-enable Time Trip Function");
         
         //get the commands data 
         int tt_exp_data = h_get_cmd_addr(0x31ea, (int*)(0));
