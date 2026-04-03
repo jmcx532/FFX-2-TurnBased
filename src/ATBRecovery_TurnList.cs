@@ -18,48 +18,128 @@ public unsafe partial class ATBRecoveryModule : FhModule {
      * This and the next function use 1050 because 1050 * 95 = 99750 , and the ATB calculation clamps largest possible value to 99999
      * though it never goes this high in practice
      */
-    float ReadATBTicksLeft(uint chr_id) {
+    int ReadATBValue(uint chr_id) {
         int chr_base_addr = h_MsGetChr(chr_id);
         int atb_remaining = *(int*)(chr_base_addr + ATB_REMAIN_OFFSET);
 
-        // if ATB is full, return 1050 - full bar
-        if (atb_remaining == 0) { return 1050.0f; }
-        // calculate ticks
-        double ticks_left = Math.Ceiling((double)atb_remaining / 95);
-        return (float)(1050 - ticks_left);
+        return atb_remaining;
     }
 
     // similar to above, but used to calculate values for future turns
-    float[] GetNextATBTicksLeft(uint chr_id, bool isTheirTurn) {
+    // construct an array of floats, which are used in CTBStyleBar(remaining, size)
+    int[] GetNextATBValues(uint chr_id, bool isTheirTurn) {
         int chr_base_addr = h_MsGetChr(chr_id);
+
+
         int atb_remaining = *(int*)(chr_base_addr + ATB_REMAIN_OFFSET);
         // create an array to store 2 future turn values
-        float[] ticks_left_array = new float[2];
+        int[] atb_values_array = new int[8];
 
-        //for the character that has the turn currently
+        //get the command the player hovers over, and run the ATB Recovery calculation, add it to their current value for the answer
+        ushort hovered_command = GetHoveredCommand();                   // id of command
+        int cmd_base = h_MsGetComData(hovered_command, (int*)0);        // root address of cmd in loaded command.bin
+
+        //for character isTheirTurn - the turn after, calculate using Attack and add the result of the previous calculation
+        int immediate_turn_atb_val = h_MsATBgetRestTime(chr_id, hovered_command);
+        atb_values_array[0] = immediate_turn_atb_val;
+
+
+        bool cmdHasATBHealingOrDmg = (*(byte*)(cmd_base + 0x27)) == 4;  // Does the command target ATB
+        uint com_dmg_data = *(uint*)(cmd_base + 0x1c);                  // get damage flags
+        uint com_exp_data = *(uint*)(cmd_base + 0x14);                  // get exp_data flags
+        uint com_cursor = *(uint*)(cmd_base + 0x10);
+
+        uint com_cursor_target = FhUtil.get_bits(com_cursor, 2, 2);
+
+        bool com_heals = ((com_dmg_data >> 4) & 1) != 0;                // does the command heal? or damage?
+        bool com_weak_delay = (com_exp_data & 0x1000) != 0;          // is weak delay flag set?
+        bool com_strong_delay = (com_exp_data & 0x2000) != 0;        // is strong delay flag set?
+
+        bool isTargeted = IsTargeted(chr_id);
+
+        bool commandInflictsHaste = *(byte*)(cmd_base + 0x4b) > 0;
+        bool commandInflictsSlow = *(byte*)(cmd_base + 0x4c) > 0;
+
+
+        // ATB Healing/Damage preview
+        if (cmdHasATBHealingOrDmg && isTargeted) {
+            byte cmd_power = *(byte*)(cmd_base + 0x2b);
+            float multiplier = (cmd_power / 16.0f);
+            int atb_damage;
+            if (isTheirTurn) {
+                atb_damage = (int)((float)immediate_turn_atb_val * multiplier);
+                if (com_heals) { atb_damage = -atb_damage;}
+                immediate_turn_atb_val = immediate_turn_atb_val + atb_damage;
+            }
+            else {
+                atb_damage = (int)((float)atb_remaining * multiplier);
+                if (com_heals) { atb_damage = -atb_damage; }
+                atb_remaining = atb_remaining + atb_damage;
+            }
+
+        }
+
+        // Delay preview
+        uint potential_delay = 0;
+        if (isTargeted) {
+            if (com_weak_delay) {
+                potential_delay += FhUtil.get_at<uint>(0x9f8ea0);
+            }
+            if (com_strong_delay) {
+                potential_delay += FhUtil.get_at<uint>(0x9f8ea4);
+            }
+        }
+
+        int wait_value_per_turn = h_MsATBgetRestTime(chr_id, 0x2C30);
+        // Haste / Slow handling
+        if (commandInflictsHaste && isTargeted) {
+            if (*(int*)(chr_base_addr + 0x4b8) < 1) {
+                wait_value_per_turn = wait_value_per_turn / 2;
+            }
+        }
+        if (commandInflictsSlow && isTargeted) {
+            if (*(int*)(chr_base_addr + 0x4b9) < 1) {
+                wait_value_per_turn = wait_value_per_turn / 2;
+            }
+        }
+
+
+        // for the character that has the turn currently
         if (isTheirTurn) {
-            //get the command the player hovers over, and run the ATB Recovery calculation, add it to their current value for the answer
-            ushort hovered_command = GetHoveredCommand();
-            int future_turn_atb_val = h_MsATBgetRestTime(chr_id, hovered_command) + atb_remaining;
-            //for the turn after, calculate using Attack and add the result of the previous calculation
-            int future_turn_atb_val2 = h_MsATBgetRestTime(chr_id, 0x2C30) + future_turn_atb_val;
-            //invert and calculate ticks
-            ticks_left_array[0] = 1050 - (future_turn_atb_val / 95);
-            ticks_left_array[1] = 1050 - (future_turn_atb_val2 / 95);
+            for (int i = 1; i < 8; i++) {
+                int future_turn_atb_val = (int)(immediate_turn_atb_val + potential_delay + (wait_value_per_turn * i));
+                //invert and calculate ticks
+                atb_values_array[i] = future_turn_atb_val;
+            }
 
         }
         else {
-            //for character's that don't have the current turn - calculate 2 future turn ticks using Attack
-            int future_turn_atb_val = h_MsATBgetRestTime(chr_id, 0x2C30) + atb_remaining;
-            int future_turn_atb_val2 = h_MsATBgetRestTime(chr_id, 0x2C30)+ future_turn_atb_val;
-            //invert and calculate ticks
-            ticks_left_array[0] = 1050 - (future_turn_atb_val / 95);
-            ticks_left_array[1] = 1050 - (future_turn_atb_val2 / 95);
+            for (int i = 0; i < 8; i++) {
+                int future_turn_atb_val = (int)(atb_remaining + potential_delay +(wait_value_per_turn * i));
+                atb_values_array[i] = future_turn_atb_val;
+            }
         }
 
-        return ticks_left_array;
+        return atb_values_array;
 
     }
+
+    public bool IsTargeted(uint chr_id) {
+        uint targeted_chrs_field = FhUtil.get_at<uint>(0xdb74b8);
+        uint[] targeted_chrs = new uint[31];
+
+        for (int i = 0;i < targeted_chrs.Length; i++) {
+            targeted_chrs[i] = (targeted_chrs_field >> i) & 1;
+        }
+
+        if (targeted_chrs[chr_id] == 1) {
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+
 
     //returns the id of which command is being hovered over, used to update the view when current character hovers over different commands
     ushort GetHoveredCommand() {
@@ -156,51 +236,39 @@ public unsafe partial class ATBRecoveryModule : FhModule {
             uint active_chr_id = FhUtil.get_at<uint>(0x00DB747C);
 
             /* create a list that will store character's turn information
-             * Floats that represent how close they are to getting a turn
+             * ATB Remaining values
              * String for their character name.
+             * chr_id
              */
-            var TurnOrderList = new List<Tuple<float, string>>();
+            var TurnOrderList = new List<Tuple<int, string, uint>>();
 
             // add immediate next turn entries - including 0 left for character with current turn 
             for (uint chr_id = 0; chr_id < 0x1f; chr_id++) {
 
                 int chr_base_addr = h_MsGetChr(chr_id);
+                bool isTheirTurn = *(int*)(chr_base_addr + 0x9d8) < 1 ;
                 byte actual_unit = *(byte*)(chr_base_addr + 0x1784);
                 int remaining_hp = *(int*)(chr_base_addr + 0x3b4);
 
-                // if is an actual unit and has HP remaining
-                if (actual_unit == 1 && remaining_hp > 0) {
-                    //add the character's immediate turn to the list
-                    TurnOrderList.Add(Tuple.Create(ReadATBTicksLeft(chr_id), ReadChrName(chr_id)));
+                bool firstTurnAdded = false;
+                //add current turn entry
+                if (actual_unit == 1 && remaining_hp > 0 && isTheirTurn && !firstTurnAdded) {
+                    TurnOrderList.Add(Tuple.Create(ReadATBValue(chr_id), ReadChrName(chr_id), chr_id));
+                    firstTurnAdded = true;
                 }
-            }
 
-            //add future turn entries 
-            for (uint chr_id = 0; chr_id < 0x1f; chr_id++) {
-
-                int chr_base_addr = h_MsGetChr(chr_id);
-                byte actual_unit = *(byte*)(chr_base_addr + 0x1784);
-                int remaining_hp = *(int*)(chr_base_addr + 0x3b4);
-
-                // if is an actual unit and has HP remaining
+                // if is an actual unit and has HP remaining - add future turn entries
                 if (actual_unit == 1 && remaining_hp > 0) {
-                    if (chr_id == active_chr_id) {
-                        float[] ticks_left_array = GetNextATBTicksLeft(chr_id, true);
-                        TurnOrderList.Add(Tuple.Create(ticks_left_array[0], ReadChrName(chr_id)));
-                        TurnOrderList.Add(Tuple.Create(ticks_left_array[1], ReadChrName(chr_id)));
+                    int[] atb_values = GetNextATBValues(chr_id, isTheirTurn);
+                    for (int i = 0; i < atb_values.Length; i++) {
+                        TurnOrderList.Add(Tuple.Create(atb_values[i], ReadChrName(chr_id), chr_id));
                     }
-                    else {
-                        float[] ticks_left_array = GetNextATBTicksLeft(chr_id, false);
-                        TurnOrderList.Add(Tuple.Create(ticks_left_array[0], ReadChrName(chr_id)));
-                        TurnOrderList.Add(Tuple.Create(ticks_left_array[1], ReadChrName(chr_id)));
-                    }
-
 
                 }
             }
 
             // sort and draw from the Turn Order list
-            var sortedList = TurnOrderList.OrderByDescending(x => x.Item1).ToList();
+            var sortedList = TurnOrderList.OrderBy(x => x.Item1).ToList();
             // get min/max and range for normalisation so all bars aren't all bright and nearly full
             float minTicks = TurnOrderList.Min(x => x.Item1);
             float maxTicks = TurnOrderList.Max(x => x.Item1);
@@ -210,7 +278,7 @@ public unsafe partial class ATBRecoveryModule : FhModule {
             foreach (var item in sortedList) {
                 float normalized = (item.Item1 - minTicks) / range;
 
-                CTBStyleBar(normalized, new Vector2(/*(1 - normalized) */ 32, 28));
+                CTBStyleBar(1 - normalized, new Vector2( 32, 28));
                 ImGui.SameLine();
                 ImGui.Text(item.Item2);
             }
