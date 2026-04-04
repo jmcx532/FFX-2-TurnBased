@@ -13,6 +13,8 @@ namespace Fahrenheit.Modules.FFX2TurnBased;
 [FhLoad(FhGameId.FFX2)]
 public unsafe partial class ATBRecoveryModule : FhModule {
 
+    const ushort spherechange_atb_cost = 20;
+
     //function delegates
     //634140 - MsATBgetRestTime
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -28,7 +30,7 @@ public unsafe partial class ATBRecoveryModule : FhModule {
     /* this function returns a base address for a command as far as the scope of ATB recovery time is concerned.
      * In reality, it checks a whole range of things, commands (item, command, monmagic), auto-abilities, Garment Grids*/
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    public unsafe delegate int MsGetComData(uint command_id, int* param_2);
+    public unsafe delegate int MsGetComData(uint command_id, byte* param_2);
     //624cd0 - MsCheckRange
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate int clamp_between(int param_1, int param_2, int param_3);
@@ -87,9 +89,11 @@ public unsafe partial class ATBRecoveryModule : FhModule {
 
     //this function returns the base address for various Excel data types
     //param_1 is the command id (e.g 0x3002)
-    public unsafe int h_MsGetComData(uint command_id, int* param_2) {
-        //recov_logger.Info("GET_CMD_ADDR PARAM_1 is:" + param_1.ToString("X"));
-        return _MsGetComData_handle.orig_fptr.Invoke(command_id, param_2);
+    public unsafe int h_MsGetComData(uint command_id, byte* param_2) {
+
+
+        int result = _MsGetComData_handle.orig_fptr.Invoke(command_id, param_2);
+        return result;
     }
     public int h_clamp_between(int param_1, int param_2, int param_3) {
         return _clamp_between_handle.orig_fptr.Invoke(param_1, param_2, param_3);
@@ -114,7 +118,7 @@ public unsafe partial class ATBRecoveryModule : FhModule {
         /* Gets the character's base address */
         chr_base_address = h_MsGetChr(chr_id);
         // FUN_00625160 - Get the commands base address, this function can also return other Excel data types
-        cmd_base_address = h_MsGetComData(command_id, (int*)(0));
+        cmd_base_address = h_MsGetComData(command_id, (byte*)(0));
 
         //normal calculation
         //read the commands atb_cost and multiply
@@ -205,7 +209,7 @@ public unsafe partial class ATBRecoveryModule : FhModule {
             percent_reduction = (int)*(byte*)(chr_base_addr + 0x5b8 + incV1);
             
             //get the base address of the menu command (e.g White Magic, Swordplay etc.)
-            menu_cmd_addr = h_MsGetComData((uint)*puVar1, (int*)(0));
+            menu_cmd_addr = h_MsGetComData((uint)*puVar1, (byte*)(0));
             
                 
             //condition 1: do something with the menu commands 'sub_command' parameter
@@ -250,7 +254,7 @@ public unsafe partial class ATBRecoveryModule : FhModule {
         if (*(byte*)(chr_base + 0xF3D) == 0x50) {
             // overwrite ATB time remaining -- simulates a command with atb_cost of 20 - half as much wait as an item
             byte agility = *(byte*)(chr_base + 0x39a);
-            int atb_length = (20 * 10000) / (agility + 1);
+            int atb_length = (spherechange_atb_cost * 10000) / (agility + 1);
             if ( *(sbyte*)(chr_base + 0x4b8) > 0) { atb_length = atb_length / 2; }//haste also halves recovery time on spherchange
             if (*(sbyte*)(chr_base + 0x4b9) > 0) { atb_length = atb_length * 2; }//slow also doubles recovery time on spherchange
 
@@ -270,8 +274,8 @@ public unsafe partial class ATBRecoveryModule : FhModule {
     public void disable_time_Trip() {
         
             //get the commands data 
-            int tt_exp_data = h_MsGetComData(0x31EA, (int*)(0));
-            int tt_mp_cost = h_MsGetComData(0x31EA, (int*)(0));
+            int tt_exp_data = h_MsGetComData(0x31EA, (byte*)(0));
+            int tt_mp_cost = h_MsGetComData(0x31EA, (byte*)(0));
 
             //set its com_dark_flag to true - this makes it drain HP instead of MP
             *(int*)(tt_exp_data + 0x14) |= (1 << 28);

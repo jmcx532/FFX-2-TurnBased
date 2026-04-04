@@ -10,6 +10,18 @@ public unsafe partial class ATBRecoveryModule : FhModule {
     const int ATB_REMAIN_OFFSET = 0x9D8;
     const int ATB_LENGTH_OFFSET = 0x9DC;
 
+    public struct TurnEntry {
+        public int atb_value;     
+        public string chr_name;      
+        public uint chr_id;   
+
+        public TurnEntry(int atbValue, string chrName, uint chrId) {
+            atb_value = atbValue;
+            chr_name = chrName;
+            chr_id = chrId;
+        }
+    }
+
 
     /* function that converts a character's raw ATB remaining value, into ticks - based on the games ATB Speed config value
      * that is fixed to 95 for Slow/Normal/Fast
@@ -25,6 +37,21 @@ public unsafe partial class ATBRecoveryModule : FhModule {
         return atb_remaining;
     }
 
+    int GetDressphereJobData(ushort dressphere_id) {
+        int job_data_address;
+
+        int job_bin_addr = FhUtil.get_at<int>(0x9f9188);// read job.bin pointer
+
+
+        uint ds_id = (uint)(dressphere_id & 0xfff);
+        uint header_size = 32;
+        uint struct_size = 0xe4;
+
+        job_data_address = (int)(job_bin_addr + header_size + (ds_id * struct_size));
+
+        return job_data_address;
+    }
+
     // similar to above, but used to calculate values for future turns
     // construct an array of floats, which are used in CTBStyleBar(remaining, size)
     int[] GetNextATBValues(uint chr_id, bool isTheirTurn) {
@@ -32,17 +59,53 @@ public unsafe partial class ATBRecoveryModule : FhModule {
 
 
         int atb_remaining = *(int*)(chr_base_addr + ATB_REMAIN_OFFSET);
-        // create an array to store 2 future turn values
+        // create an array to store 8 future turn values
         int[] atb_values_array = new int[8];
 
         //get the command the player hovers over, and run the ATB Recovery calculation, add it to their current value for the answer
         ushort hovered_command = GetHoveredCommand();                   // id of command
-        int cmd_base = h_MsGetComData(hovered_command, (int*)0);        // root address of cmd in loaded command.bin
+        int cmd_base = h_MsGetComData(hovered_command, (byte*)0);        // root address of cmd in loaded command.bin
 
         //for character isTheirTurn - the turn after, calculate using Attack and add the result of the previous calculation
         int immediate_turn_atb_val = h_MsATBgetRestTime(chr_id, hovered_command);
-        atb_values_array[0] = immediate_turn_atb_val;
 
+        byte spherechange_menu_open = FhUtil.get_at<byte>(0x9F7000);
+        ushort highlighted_dressphere = FhUtil.get_at<ushort>(0xA016F6);
+        int job_base_address = h_MsGetComData(highlighted_dressphere, (byte*)0);
+
+        if (spherechange_menu_open == 1) {
+            job_base_address = GetDressphereJobData(highlighted_dressphere);
+
+            //If is a dressphere change
+            if (job_base_address != 0) {
+                byte[] agility_growth_constants = new byte[5];
+
+                for (int i = 0; i < 5; i++) {
+                    byte agl_constant = *(byte*)(job_base_address + 0x28 + i);
+                    agility_growth_constants[i] = agl_constant;
+                }
+
+
+                byte chr_level = *(byte*)(chr_base_addr + 0x380);
+                //e.g berserker
+                byte ac0 = agility_growth_constants[0]; // 0 or 1, gets divided by 10 to usually give 0 or 0.1
+                byte ac1 = agility_growth_constants[1]; //80
+                byte ac2 = agility_growth_constants[2]; //58
+                byte ac3 = agility_growth_constants[3]; //200
+                byte ac4 = agility_growth_constants[4]; //4
+
+                float ac0f = ac0 / 10f;
+                float ac1f = ac1 == 0 ? 1f : ac1;
+                float ac3f = ac3 == 0 ? 1f : ac3;
+                float ac4f = ac4 == 0 ? 1f : ac4;
+                float agility = (chr_level * ac0f) + ((chr_level / ac1f) + ac2) - ((chr_level * chr_level) / 16f / ac3f / ac4f);
+
+                immediate_turn_atb_val = (int)((spherechange_atb_cost * 10000) / (agility + 1f));
+
+            }
+        }
+
+        atb_values_array[0] = immediate_turn_atb_val;
 
         bool cmdHasATBHealingOrDmg = (*(byte*)(cmd_base + 0x27)) == 4;  // Does the command target ATB
         uint com_dmg_data = *(uint*)(cmd_base + 0x1c);                  // get damage flags
@@ -99,7 +162,7 @@ public unsafe partial class ATBRecoveryModule : FhModule {
         }
         if (commandInflictsSlow && isTargeted) {
             if (*(int*)(chr_base_addr + 0x4b9) < 1) {
-                wait_value_per_turn = wait_value_per_turn / 2;
+                wait_value_per_turn = wait_value_per_turn * 2;
             }
         }
 
@@ -232,15 +295,14 @@ public unsafe partial class ATBRecoveryModule : FhModule {
             );
 
             int chr_structs_start = h_MsGetChr(0);
-            // get the ID of the character who currently has the turn
-            uint active_chr_id = FhUtil.get_at<uint>(0x00DB747C);
 
             /* create a list that will store character's turn information
              * ATB Remaining values
              * String for their character name.
              * chr_id
              */
-            var TurnOrderList = new List<Tuple<int, string, uint>>();
+            //var TurnOrderList = new List<Tuple<int, string, uint>>();
+            var TurnOrderList = new List<TurnEntry>();
 
             // add immediate next turn entries - including 0 left for character with current turn 
             for (uint chr_id = 0; chr_id < 0x1f; chr_id++) {
@@ -250,37 +312,42 @@ public unsafe partial class ATBRecoveryModule : FhModule {
                 byte actual_unit = *(byte*)(chr_base_addr + 0x1784);
                 int remaining_hp = *(int*)(chr_base_addr + 0x3b4);
 
-                bool firstTurnAdded = false;
+                
+                uint menu_active_chr_id = FhUtil.get_at<uint>(0x00DB747C); // Chr id of who has menu open
                 //add current turn entry
-                if (actual_unit == 1 && remaining_hp > 0 && isTheirTurn && !firstTurnAdded) {
-                    TurnOrderList.Add(Tuple.Create(ReadATBValue(chr_id), ReadChrName(chr_id), chr_id));
-                    firstTurnAdded = true;
+                if (actual_unit == 1 && remaining_hp > 0 && isTheirTurn && (chr_id == menu_active_chr_id)) {
+                    TurnOrderList.Add(new TurnEntry(ReadATBValue(chr_id), ReadChrName(chr_id), chr_id));
                 }
 
                 // if is an actual unit and has HP remaining - add future turn entries
                 if (actual_unit == 1 && remaining_hp > 0) {
                     int[] atb_values = GetNextATBValues(chr_id, isTheirTurn);
                     for (int i = 0; i < atb_values.Length; i++) {
-                        TurnOrderList.Add(Tuple.Create(atb_values[i], ReadChrName(chr_id), chr_id));
+                        TurnOrderList.Add(new TurnEntry(atb_values[i], ReadChrName(chr_id), chr_id));
                     }
 
                 }
             }
 
             // sort and draw from the Turn Order list
-            var sortedList = TurnOrderList.OrderBy(x => x.Item1).ToList();
+            var sortedList = TurnOrderList
+                .OrderBy(x => x.atb_value)
+                .Take(16)
+                .ToList();
+                
+
             // get min/max and range for normalisation so all bars aren't all bright and nearly full
-            float minTicks = TurnOrderList.Min(x => x.Item1);
-            float maxTicks = TurnOrderList.Max(x => x.Item1);
-            float range = Math.Max(1f, maxTicks - minTicks);
+            float minValue = sortedList.Min(x => x.atb_value);
+            float maxValue = sortedList.Max(x => x.atb_value);
+            float range = Math.Max(1f, maxValue - minValue);
 
             // for each item in TurnOrderList (sorted) - Create a CTBStyleBar, and on the same line, print the character name.
-            foreach (var item in sortedList) {
-                float normalized = (item.Item1 - minTicks) / range;
+            foreach (var turnEntry in sortedList) {
+                float normalized = (turnEntry.atb_value - minValue) / range;
 
                 CTBStyleBar(1 - normalized, new Vector2( 32, 28));
                 ImGui.SameLine();
-                ImGui.Text(item.Item2);
+                ImGui.Text(turnEntry.chr_name);
             }
 
             ImGui.End();
