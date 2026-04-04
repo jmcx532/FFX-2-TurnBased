@@ -1,5 +1,7 @@
 ﻿
 
+using static Fahrenheit.Core.FFX.Battle.ChrRam;
+
 namespace Fahrenheit.Modules.FFX2TurnBased;
 
 public unsafe partial class ATBRecoveryModule : FhModule {
@@ -9,6 +11,8 @@ public unsafe partial class ATBRecoveryModule : FhModule {
     const int CHR_STRIDE = 0x17E0;
     const int ATB_REMAIN_OFFSET = 0x9D8;
     const int ATB_LENGTH_OFFSET = 0x9DC;
+
+    const uint TURNS_TO_SHOW = 16;
 
     public struct TurnEntry {
         public int atb_value;     
@@ -35,6 +39,77 @@ public unsafe partial class ATBRecoveryModule : FhModule {
         int atb_remaining = *(int*)(chr_base_addr + ATB_REMAIN_OFFSET);
 
         return atb_remaining;
+    }
+
+    public struct SimTurnEntry {
+        public uint chr_id; 
+        public int time; // at what point of simulation is the turn
+        public string chr_name;
+
+        public SimTurnEntry(uint chrId, int simTime, string chrName) {
+            chr_id = chrId;
+            time = simTime;
+            chr_name = chrName;
+            
+        }
+    }
+
+    List<SimTurnEntry> TurnSimulation() {
+        int sim_time = 0;
+        var turn_order = new List<SimTurnEntry>();
+
+        int[] chr_timer_values = new int[0x1f];// contains time values and used for simulation
+        //get initial state - chr time values for simulation
+        for(int i = 0; i < chr_timer_values.Length; i++) {
+            int chr_base_addr = h_MsGetChr((uint)i);
+
+            byte actual_unit = *(byte*)(chr_base_addr + 0x1784);
+            int remaining_hp = *(int*)(chr_base_addr + 0x3b4);
+
+            if ((actual_unit == 1) && (remaining_hp > 0)) {
+                chr_timer_values[i] = *(int*)(chr_base_addr + 0x9d8);
+            }
+            else {
+                chr_timer_values[i] = int.MaxValue;
+            }
+        }
+
+        // begin simulating turns
+        for (int i = 0; i < TURNS_TO_SHOW; i++) {
+            int lowest_time = chr_timer_values.Min(); // find lowest time value - should be 0
+            int chr_id_turn = chr_timer_values.IndexOf(lowest_time);// find index of that chr - chr_id
+
+            SimTurnEntry turn = new SimTurnEntry();
+            turn.chr_id = (uint)chr_id_turn;
+            turn.time = sim_time;
+            turn.chr_name = ReadChrName((uint)chr_id_turn);
+
+            turn_order.Add(turn);
+
+            //simulate turn - get recov time
+            if (i == 0) {
+                chr_timer_values[chr_id_turn] = h_MsATBgetRestTime((uint)chr_id_turn, GetHoveredCommand());// if first turn on list, use hovered command for recovery time
+            }
+            else {
+                chr_timer_values[chr_id_turn] = h_MsATBgetRestTime((uint)chr_id_turn, 0x2c30);
+            }
+
+            // Find next time advancement (smallest ATB excluding current actor)
+            int next_turn_value = chr_timer_values
+            .Where((t, idx) => idx != chr_id_turn)
+            .Min();
+
+            // Advance time
+            for (int iterator = 0; iterator < chr_timer_values.Length; iterator++) {
+                if (chr_timer_values[iterator] != int.MaxValue) {
+                    chr_timer_values[iterator] -= next_turn_value;
+                }
+            }
+
+            sim_time += next_turn_value;
+        }//loop until desired number of turns in list is reached
+            
+        return turn_order;
     }
 
     int GetDressphereJobData(ushort dressphere_id) {
@@ -286,6 +361,30 @@ public unsafe partial class ATBRecoveryModule : FhModule {
 
         // if a player character has a turn - show the turn order window
         if (num_allies_ready != 0) {
+
+            ImGui.Begin(
+                // doesn't grab focus, and you can't collapse the window
+                "Turn Order - Simulation approach",
+                ImGuiWindowFlags.NoFocusOnAppearing |
+                ImGuiWindowFlags.NoCollapse
+            );
+
+            var SimTurnOrderList = TurnSimulation();
+
+            float minValueS = SimTurnOrderList.Min(x => x.time);
+            float maxValueS = SimTurnOrderList.Max(x => x.time);
+            float rangeS = Math.Max(1f, maxValueS - minValueS);
+
+            foreach (var turnEntry in SimTurnOrderList) {
+                float normalized = (turnEntry.time - minValueS) / rangeS;
+
+                CTBStyleBar(1 - normalized, new Vector2(32, 28));
+                ImGui.SameLine();
+                ImGui.Text(turnEntry.chr_name);
+            }
+
+            ImGui.End();
+
 
             ImGui.Begin(
                 // doesn't grab focus, and you can't collapse the window
