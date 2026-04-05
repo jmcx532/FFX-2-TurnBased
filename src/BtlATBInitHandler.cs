@@ -3,83 +3,82 @@
  * Sets ATB to 0 for pre-emptive strikes normally
  */
 
-namespace Fahrenheit.Modules.PreEmptiveHandler;
 
-//function delegates
-//618b80 -- checks DAT_DF94a5 - (is 1 on premptive)(Need to check if its 2 on ambush, 0 normal) and processes
-//ALWAYS RUNS ON BATTLE START
-[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-public delegate int process_btl_init_state();
-
-//6348a0 - writes the ATB progress remaining when there is a pre-emptive strike (Maybe ambush too) (called by the previous function)
-//ONLY CALLED IF THERE IS PREEMPTIVE STRIKE / Ambush - not on normal start
-[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-public delegate int preemptive_atb_writer(byte chr_id, int param_2);
-
-//634730
-[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-public delegate uint first_strike(int chr_base_address, int param_2, int param_3);
-
-//611450
-[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-public delegate int get_chr_addr(uint chr_id);
-
-//625160 
-/* this function returns a base address for a command as far as the scope of ATB recovery time is concerned.
- * In reality, it checks a whole range of things, commands (item, command, monmagic), auto-abilities, Garment Grids*/
-[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-public unsafe delegate int get_cmd_addr(uint command_id, int* param_2);
-
-[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-public delegate int alpha_fx(int param_1, int param_2);
-[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-public delegate uint bravo_fx(int param_1);
-[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-public delegate int charlie_fx(byte param_1);
-[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-public delegate int delta_fx(uint param_1);
-
-
+namespace Fahrenheit.Modules.FFX2TurnBased;
 
 [FhLoad(FhGameId.FFX2)]
 public unsafe class PreEmptiveModule : FhModule {
-    protected readonly FhLogger _logger;
-    
+    protected readonly FhLogger btl_init_logger;
+
+    //function delegates
+    //618b80 -- checks DAT_DF94a5 - (is 1 on premptive)(Need to check if its 2 on ambush, 0 normal) and processes
+    //ALWAYS RUNS ON BATTLE START -- MsCalcFirstAttack
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate int MsCalcFirstAttack();
+
+    //6348a0 - writes the ATB progress remaining when there is a pre-emptive strike (Maybe ambush too) (called by the previous function)
+    //ONLY CALLED IF THERE IS PREEMPTIVE STRIKE / Ambush - not on normal start -- MsChrAtbReset
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate int MsChrAtbReset(byte chr_id, int param_2);
+
+    //634730
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate uint MsChrAtbInit(int chr_base_address, int param_2, int param_3);
+
+    //611450
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate int MsGetChr(uint chr_id);
+
+    //625160 
+    /* this function returns a base address for a command as far as the scope of ATB recovery time is concerned.
+     * In reality, it checks a whole range of things, commands (item, command, monmagic), auto-abilities, Garment Grids*/
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public unsafe delegate int MsGetComData(uint command_id, int* param_2);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]// 61add0 -- MsGetRndChr
+    public delegate int MsGetRndChr(int param_1, int param_2);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]// 61e290 -- brnd();
+    public delegate uint brnd(int param_1);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]// 625bf0 -- MsGetRamChrMonster
+    public delegate int MsGetRamChrMonster(byte param_1);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]// 613360 -- MsGetChrStatDeathStone
+    public delegate int MsGetChrStatDeathStone(uint param_1);
+
     //actually writes the ATB value on preemptive strike - called by init_atb_progress
-    private readonly FhMethodHandle<preemptive_atb_writer> _preemptive_handle;
+    private readonly FhMethodHandle<MsChrAtbReset> _MsChrAtbReset_handle;
     //checks DAT_DF94a5 - this is 1 on pre-emptive strike (may be 0 normally and 2 on ambush? - need to check
     //parent function of preemptive_fx
-    private readonly FhMethodHandle<process_btl_init_state> _btl_init_state_handle;
-
+    private readonly FhMethodHandle<MsCalcFirstAttack> _MsCalcFirstAttack_handle;
     //first strike handling - 634730
-    private readonly FhMethodHandle<first_strike> _first_strike_handle;
-
+    private readonly FhMethodHandle<MsChrAtbInit> _MsChrAtbInit_handle;
     //gets character base address
-    private readonly FhMethodHandle<get_chr_addr> _get_chr_addr;
+    private readonly FhMethodHandle<MsGetChr> _MsGetChr_handle;
     //used to get commands base address, can be used for auto abilites and Garment Grids maybe
-    private readonly FhMethodHandle<get_cmd_addr> _get_cmd_addr_handle;
-    private readonly FhMethodHandle<alpha_fx> _alpha_fx_handle;
-    private readonly FhMethodHandle<bravo_fx> _bravo_fx_handle;
-    private readonly FhMethodHandle<charlie_fx> _charlie_fx_handle;
-    private readonly FhMethodHandle<delta_fx> _delta_fx_handle;
+    private readonly FhMethodHandle<MsGetComData> _MsGetComData_handle;
+    private readonly FhMethodHandle<MsGetRndChr> _MsGetRndChr_handle;
+    private readonly FhMethodHandle<brnd> _brnd_handle;
+    private readonly FhMethodHandle<MsGetRamChrMonster> _MsGetRamChrMonster_handle;
+    private readonly FhMethodHandle<MsGetChrStatDeathStone> _MsGetChrStatDeathStone_handle;
 
     public PreEmptiveModule() {
         int addr_offset = 0x400000;
 
 
-        _logger = new FhLogger($"TurnBased_ATB_init_handler.log");
+        btl_init_logger = new FhLogger($"TurnBased_ATB_init_handler.log");
 
-        _btl_init_state_handle = new FhMethodHandle<process_btl_init_state>(this, "FFX-2.exe", 0x618b80 - addr_offset, h_init_btl_state);
-        _preemptive_handle = new FhMethodHandle<preemptive_atb_writer>(this, "FFX-2.exe", 0x6348a0 - addr_offset, h_preemptive_init);
-        _first_strike_handle = new FhMethodHandle<first_strike>(this, "FFX-2.exe", 0x634730 - addr_offset, h_first_strike);
+        _MsCalcFirstAttack_handle = new FhMethodHandle<MsCalcFirstAttack>(this, "FFX-2.exe", 0x618b80 - addr_offset, h_MsCalcFirstAttack);
+        _MsChrAtbReset_handle = new FhMethodHandle<MsChrAtbReset>(this, "FFX-2.exe", 0x6348a0 - addr_offset, h_MsChrAtbReset);
+        _MsChrAtbInit_handle = new FhMethodHandle<MsChrAtbInit>(this, "FFX-2.exe", 0x634730 - addr_offset, h_MsChrAtbInit);
 
-        _get_chr_addr = new FhMethodHandle<get_chr_addr>(this, "FFX-2.exe", 0x611450 - addr_offset, h_get_chr_addr);
-        _get_cmd_addr_handle = new FhMethodHandle<get_cmd_addr>(this, "FFX-2.exe", 0x625160 - addr_offset, h_get_cmd_addr);
+        _MsGetChr_handle = new FhMethodHandle<MsGetChr>(this, "FFX-2.exe", 0x611450 - addr_offset, h_MsGetChr);
+        _MsGetComData_handle = new FhMethodHandle<MsGetComData>(this, "FFX-2.exe", 0x625160 - addr_offset, h_MsGetComData);
 
-        _alpha_fx_handle = new FhMethodHandle<alpha_fx>(this, "FFX-2.exe", 0x61add0 - addr_offset, h_alpha_fx);
-        _bravo_fx_handle = new FhMethodHandle<bravo_fx>(this, "FFX-2.exe", 0x61e290 - addr_offset, h_bravo_fx);
-        _charlie_fx_handle = new FhMethodHandle<charlie_fx>(this, "FFX-2.exe", 0x625bf0 - addr_offset, h_charlie_fx);
-        _delta_fx_handle = new FhMethodHandle<delta_fx>(this, "FFX-2.exe", 0x613360 - addr_offset, h_delta_fx);
+
+        //MsChrAtbReset sub-functions
+        _MsGetRndChr_handle = new FhMethodHandle<MsGetRndChr>(this, "FFX-2.exe", 0x61add0 - addr_offset, h_MsGetRndChr);
+        _brnd_handle = new FhMethodHandle<brnd>(this, "FFX-2.exe", 0x61e290 - addr_offset, h_brnd);
+        _MsGetRamChrMonster_handle = new FhMethodHandle<MsGetRamChrMonster>(this, "FFX-2.exe", 0x625bf0 - addr_offset, h_MsGetRamChrMonster);
+        _MsGetChrStatDeathStone_handle = new FhMethodHandle<MsGetChrStatDeathStone>(this, "FFX-2.exe", 0x613360 - addr_offset, h_MsGetChrStatDeathStone);
     }
 
 
@@ -88,46 +87,46 @@ public unsafe class PreEmptiveModule : FhModule {
      *Passed with 0 gets the first party members data, 1 the second and so on
      *If it's passed with a parameter greater than 155 it does end of battle cleanup I noticed from logging before
      */
-    public int h_get_chr_addr(uint chr_id) {
-        return _get_chr_addr.orig_fptr.Invoke(chr_id);
+    public int h_MsGetChr(uint chr_id) {
+        return _MsGetChr_handle.orig_fptr.Invoke(chr_id);
     }
 
     //this function returns the base address for commands -- AND OTHER EXCEL DATA - look through its sub-functions
     //param_1 is the command id (e.g 0x3002)
-    public unsafe int h_get_cmd_addr(uint command_id, int* param_2) {
-        //_logger.Info("GET_CMD_ADDR PARAM_1 is:" + param_1.ToString("X"));
-        return _get_cmd_addr_handle.orig_fptr.Invoke(command_id, param_2);
+    public unsafe int h_MsGetComData(uint command_id, int* param_2) {
+        //btl_init_logger.Info("MsGetComData PARAM_1 is:" + param_1.ToString("X"));
+        return _MsGetComData_handle.orig_fptr.Invoke(command_id, param_2);
     }
 
-    public int h_alpha_fx(int param_1, int param_2) {
-        return _alpha_fx_handle.orig_fptr.Invoke(param_1, param_2);
+    public int h_MsGetRndChr(int param_1, int param_2) {
+        return _MsGetRndChr_handle.orig_fptr.Invoke(param_1, param_2);
     }
 
-    public uint h_bravo_fx(int param_1) {
-        return _bravo_fx_handle.orig_fptr.Invoke(param_1);
+    public uint h_brnd(int param_1) {
+        return _brnd_handle.orig_fptr.Invoke(param_1);
     }
 
-    public int h_charlie_fx(byte param_1) {
-        return _charlie_fx_handle.orig_fptr.Invoke(param_1);
+    public int h_MsGetRamChrMonster(byte param_1) {
+        return _MsGetRamChrMonster_handle.orig_fptr.Invoke(param_1);
     }
 
-    public int h_delta_fx(uint param_1) {
-        return _delta_fx_handle.orig_fptr.Invoke(param_1);
+    public int h_MsGetChrStatDeathStone(uint param_1) {
+        return _MsGetChrStatDeathStone_handle.orig_fptr.Invoke(param_1);
     }
 
     //processes the initial battle state normal, preemptive
     //ALWAYS RUNS ON BATTLE START
-    public unsafe int h_init_btl_state() {
+    public unsafe int h_MsCalcFirstAttack() {
 
-        _logger.Info("h_init_btl_state function called");
+        btl_init_logger.Info("h_init_btl_state function called");
         //re-enable Psychics Time Trip command - can only use once per battle
         reenable_time_trip();
 
         //update YRPs +ec2 state flag (normally increments when target hit) - used for counterattack handling and needs to be set at start of battle to avoid softlock
         //this is used for ally counter-attack handling to set wait mode until they've finished
-        int y_addr = h_get_chr_addr(0);
-        int r_addr = h_get_chr_addr(1);
-        int p_addr = h_get_chr_addr(2);
+        int y_addr = h_MsGetChr(0);
+        int r_addr = h_MsGetChr(1);
+        int p_addr = h_MsGetChr(2);
 
         *(byte*)(y_addr + 0xec2) = 1;
         *(byte*)(r_addr + 0xec2) = 1;
@@ -140,12 +139,12 @@ public unsafe class PreEmptiveModule : FhModule {
         *(int*)(r_addr + 0x694) = 32;
         *(int*)(p_addr + 0x694) = 32;
 
-        return _btl_init_state_handle.orig_fptr.Invoke();
+        return _MsCalcFirstAttack_handle.orig_fptr.Invoke();
     }
 
     //overwrites characters ATB time left
     //ONLY CALLED IF THERE IS PREEMPTIVE STRIKE (maybe ambush too, but not on normal start)
-    public unsafe int h_preemptive_init(byte chr_id, int param_2) {
+    public unsafe int h_MsChrAtbReset(byte chr_id, int param_2) {
 
 
         int iVar1;
@@ -154,13 +153,13 @@ public unsafe class PreEmptiveModule : FhModule {
         int iVar4;
         int iVar5;
 
-        iVar1 = h_get_chr_addr(chr_id);
+        iVar1 = h_MsGetChr(chr_id);
         iVar5 = *(int*)(iVar1 + 0x9dc);
-        iVar2 = h_alpha_fx(chr_id, 0);
-        uVar3 = h_bravo_fx(iVar2);
+        iVar2 = h_MsGetRndChr(chr_id, 0);
+        uVar3 = h_brnd(iVar2);
         uVar3 = uVar3 & 0xf;
         if (param_2 == 0) {
-            iVar4 = h_charlie_fx(chr_id);
+            iVar4 = h_MsGetRamChrMonster(chr_id);
             if (iVar4 == 0) { uVar3 = 0; }
             iVar4 = 0;
         }
@@ -172,7 +171,7 @@ public unsafe class PreEmptiveModule : FhModule {
 
         iVar5 = (int)((iVar5 >> 0x1f & 0x7fU) + iVar5) >> 7;
         if ((*(byte*)(iVar1 + 0x650) & 1) == 0) {
-            iVar4 = h_delta_fx(chr_id);
+            iVar4 = h_MsGetChrStatDeathStone(chr_id);
             if (iVar4 == 0) {
                 /*overwrite characters ATB time remaining as Chr_id + 1 if they have priority
                 *YRP will end up with values of 3,4 5 - enemies will have ATB time values of 18, 19, 20
@@ -189,9 +188,9 @@ public unsafe class PreEmptiveModule : FhModule {
     }
 
 
-    //handle case where multiple characters may have First Strike - TEST AMBUSH - DOES FIRST STRIKE CORRECTLY GIVE PRIORITY?
-    public uint h_first_strike(int chr_base_address, int param_2, int param_3) {
-        uint original_result = _first_strike_handle.orig_fptr.Invoke(chr_base_address, param_2, param_3);
+    //Tb -handle case where multiple characters may have First Strike - TEST AMBUSH - DOES FIRST STRIKE CORRECTLY GIVE PRIORITY?
+    public uint h_MsChrAtbInit(int chr_base_address, int param_2, int param_3) {
+        uint original_result = _MsChrAtbInit_handle.orig_fptr.Invoke(chr_base_address, param_2, param_3);
 
         //original result is this if chr_base_address is non-zero in original function
         if (original_result == 0xffffffff) {
@@ -208,11 +207,11 @@ public unsafe class PreEmptiveModule : FhModule {
     //function to re-enable Psychics Time Trip command
     public void reenable_time_trip() {
 
-        _logger.Info("Re-enable Time Trip Function");
+        btl_init_logger.Info("Re-enable Time Trip Function");
         
         //get the commands data 
-        int tt_exp_data = h_get_cmd_addr(0x31ea, (int*)(0));
-        int tt_mp_cost = h_get_cmd_addr(0x31ea, (int*)(0));
+        int tt_exp_data = h_MsGetComData(0x31ea, (int*)(0));
+        int tt_mp_cost = h_MsGetComData(0x31ea, (int*)(0));
         
 
         if ((tt_exp_data & (1 << 28)) != 0) {
@@ -231,16 +230,16 @@ public unsafe class PreEmptiveModule : FhModule {
 
 
     public override bool init(FhModContext mod_context, FileStream global_state_file) {
-        _get_chr_addr.hook();
-        _preemptive_handle.hook();
-        _btl_init_state_handle.hook();
-        _first_strike_handle.hook();
+        _MsGetChr_handle.hook();
+        _MsChrAtbReset_handle.hook();
+        _MsCalcFirstAttack_handle.hook();
+        _MsChrAtbInit_handle.hook();
 
-        _get_cmd_addr_handle.hook();
-        _alpha_fx_handle.hook();
-        _bravo_fx_handle.hook();
-        _charlie_fx_handle.hook();
-        _delta_fx_handle.hook();
+        _MsGetComData_handle.hook();
+        _MsGetRndChr_handle.hook();
+        _brnd_handle.hook();
+        _MsGetRamChrMonster_handle.hook();
+        _MsGetChrStatDeathStone_handle.hook();
         return true;
     }
 
