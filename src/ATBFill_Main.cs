@@ -585,16 +585,6 @@ public unsafe partial class ATBFillModule : FhModule {
         uint uVar1;
         uint animation_speed;
 
-        //Haste and Slow adjustment - left in to increase their animation speed properly
-        //Haste calculation - checks character's Haste Timer and multiplies if it has time remaining
-        if (*(byte*)(chr_base_addr + 0x43c) != '\0') {
-            speed_value = (speed_value * 21) / 20;
-        }
-        //Slow calculation - checks character's Slow Timer and multiplies if it has time remaining
-        if ((*(byte*)(chr_base_addr + 0x43d) != '\0') && speed_value > 1) {
-            speed_value = speed_value / 2;
-        }
-
         //Negative status adjustments
         //returns a bitfield where bit 0 is Stop status, bit 1 is petrify status and bit 2 is Sleep status
         uVar1 = h_MsStatCheckStop((byte)chr_id, 0);// FUN_006430f0(chr_id, 0);
@@ -622,7 +612,7 @@ public unsafe partial class ATBFillModule : FhModule {
         *(uint*)(chr_base_addr + 0x9f0) = speed_value;
         //speed value 3 - writes the status or animation speed?
         *(uint*)(chr_base_addr + 0x9ec) = animation_speed;
-        //speed value 4 - This allows statuses to decrement
+        //speed value 4 - This allows statuses to decrement?
         *(uint*)(chr_base_addr + 0x9e8) = uVar1;
 
         //speed value 1 - Write the character's ATB countdown per tick and return
