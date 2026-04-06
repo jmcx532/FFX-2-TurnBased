@@ -1,4 +1,6 @@
-﻿namespace Fahrenheit.Modules.FFX2TurnBased;
+﻿using static Fahrenheit.Modules.FFX2TurnBased.ATBRecoveryModule;
+
+namespace Fahrenheit.Modules.FFX2TurnBased;
 
 
 public unsafe partial class ATBFillModule : FhModule {
@@ -49,6 +51,13 @@ public unsafe partial class ATBFillModule : FhModule {
     public delegate int MsMotionRecoverExe(uint chr_id, int param_2);
     private readonly FhMethodHandle<MsMotionRecoverExe> _MsMotionRecoverExe_handle;
 
+    //625160 - MsGetComData
+    /* this function returns a base address for a command as far as the scope of ATB recovery time is concerned.
+     * In reality, it checks a whole range of things, commands (item, command, monmagic), auto-abilities, Garment Grids*/
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public unsafe delegate int MsGetComData(uint command_id, byte* param_2);
+
+
 
     //Hooked functions
     public uint h_MsStatCheckStop(byte chr_id, int param_2) {
@@ -85,9 +94,77 @@ public unsafe partial class ATBFillModule : FhModule {
         return _MsMotionRecoverExe_handle.orig_fptr.Invoke(chr_id, param_2);
     }
 
+    public unsafe int h_MsGetComData(uint command_id, byte* param_2) {
+        return _MsGetComData_handle.orig_fptr.Invoke(command_id, param_2);
+    }
 
 
-    public void TbSleepStopProcess(byte chr_id) {
+    public int cannnotActRestTime(uint chr_id, uint command_id) {
+        int chr_base_address;
+        int cmd_base_address;
+
+        /* Gets the character's base address */
+        chr_base_address = h_MsGetChr(chr_id);
+        // FUN_00625160 - Get the commands base address, this function can also return other Excel data types
+        cmd_base_address = h_MsGetComData(command_id, (byte*)(0));
+
+        //normal calculation
+        //read the commands atb_cost and multiply
+        int cmd_recovery_time = (int)(*(ushort*)(cmd_base_address + 0x22) * 10000);
+
+        //divide that by (user's Agility + 1) -- VANILLA
+        //uint agility_divisor = (uint)(*(byte*)(chr_base_address + 0x39a)) + 1;
+
+        //CUSTOM DIVISOR
+        byte agility = (*(byte*)(chr_base_address + 0x39a));
+        double divisor;
+        //if agility is over 100, use a stronger taper that means higher agility stats don't reduce recovery time as much.
+        if (agility > 100) {
+            divisor = Math.Pow(agility + 125, 0.85) + 1;
+        }
+        else {
+            //if agility is 99 or less, use vanilla divisor
+            divisor = agility + 1;
+        }
+
+        uint agility_divisor = (uint)Math.Round(divisor);
+
+
+
+        //delay from attacks to be added
+        uint accrued_delay = (uint)*(int*)(chr_base_address + 0x9e0);
+        //calculate ATB timer length and clamp between 0 and 99999
+        int calced_recovery = h_ClampBetween((int)((cmd_recovery_time / agility_divisor) + accrued_delay), 0, 99999);
+
+
+        //Haste / Slow Modifier
+        //if character is hasted - half recovery time
+        if (*(byte*)(chr_base_address + 0x43c) != '\0') {
+            calced_recovery = calced_recovery / 2;
+        }
+        //if character is slowed - double recovery time
+        if (*(byte*)(chr_base_address + 0x43d) != '\0') {
+            calced_recovery = calced_recovery * 2;
+        }
+
+
+        //auto ability recovery time reduction
+        ushort command_used = (*(ushort*)(chr_base_address + 0xf3c));
+        int percent_reduction = 0;
+        //recov_logger.Info("Command charge time percent reduction is: " + percent_reduction);
+
+        //apply auto ability reduction
+        calced_recovery = ((100 - percent_reduction) * calced_recovery) / 100;
+
+        // Accrued delay is reset 
+        *(int*)(chr_base_address + 0x9e0) = 0;
+
+
+        //return calculated recovery time to be written
+        return calced_recovery;
+    }
+
+    public void TbCantActStatusProcess(uint chr_id) {
         int chr_base;
         uint status_bitfield2;
         int local_38;
@@ -117,7 +194,7 @@ public unsafe partial class ATBFillModule : FhModule {
                 // Read Chrs second copy of status bitfield
                 status_bitfield2 = *(uint*)(chr_base + 0x450);
 
-                bool isAsleep = (*(uint*)(chr_base + 0x434) >> 2 & 1) == 1;// check poison state
+                bool isAsleep = (*(uint*)(chr_base + 0x434) >> 2 & 1) == 1;// check sleep state
                 uint sleep_off_count = *(uint*)(chr_base + 0x45c);
                 
 
@@ -144,8 +221,48 @@ public unsafe partial class ATBFillModule : FhModule {
 
             *(uint*)(chr_base + 0x450) = status_bitfield2;// write the character's updated status bitfield
 
-                if (local_2c != 0) {
-                    /* Status timer decrementer */
+            //Poison Handling
+
+            int* piVar8;
+            int ChrSpeedVal3 = *(int*)(chr_base + 0x9ec);
+
+            bool isPoisoned = (*(uint*)(chr_base + 0x434) >> 5 & 1) == 1;// check poison state
+            if (isPoisoned) {
+                piVar8 = (int*)(chr_base + 0x684);// Get pointer to Chr poison accumulator time value
+                *piVar8 = *piVar8 + (int)ChrSpeedVal3;//Write or increase the accumulator by the Chrs Speed Value
+                int psn_accumulator_val = *(int*)(chr_base + 0x684);// Read the updated accumulator
+
+                // If the accumulator value is greater than the threshold value
+                if (*(int*)(chr_base + 0x68c) < psn_accumulator_val) {
+                    int psn_damage_amount = 0;
+                    // Accumulator value is written as: previously read accumulator value - the threshold value
+                    *(int*)(chr_base + 0x684) = psn_accumulator_val - *(int*)(chr_base + 0x68c);
+
+                    //psn_damage_amount = (*(int*)(chr_base + 0x694) * *(int*)(chr_base + 0x384)) >> 8; // Poison Dmg Calc: (X/256) * MaxHP
+                    psn_damage_amount = (int)((*(int*)(chr_base + 0x694) / 256.0) * *(int*)(chr_base + 0x384));
+
+
+                    //byte[] local_1c_psn = new byte[0x14];
+                    DamageBuffer psn_buffer = new();
+                    DamageBuffer* pBuffer = &psn_buffer;
+
+                    h_MsStructClear(pBuffer, 0x14);//62a0f0
+                    //local_18 = 0x100ff;
+                    psn_buffer.unk1 = 0xff;
+                    psn_buffer.unk2 = 0x01;
+                    //local_1c[0] = (byte)chr_id;
+                    psn_buffer.chr_id = (byte)chr_id;
+                    //local_14 = psn_damage_amount;
+                    psn_buffer.damage_amount = psn_damage_amount;
+
+                    h_MsDamageBufferExe(chr_id, chr_id, pBuffer);//6422d0
+
+
+                }
+            }
+
+            if (local_2c != 0) {
+                    // Status timer decrementer?
                     h_MsSetStatus(chr_id, 0xff, 1, 1);//636ca0
                     h_MsSetChrWeak(chr_id, 0xffffffff);//61b080
                 }

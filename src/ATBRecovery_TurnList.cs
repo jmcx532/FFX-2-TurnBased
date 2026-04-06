@@ -1,7 +1,4 @@
 ﻿
-using System.Data;
-using TerraFX.Interop.Windows;
-
 namespace Fahrenheit.Modules.FFX2TurnBased;
 
 public unsafe partial class ATBRecoveryModule : FhModule {
@@ -90,15 +87,34 @@ public unsafe partial class ATBRecoveryModule : FhModule {
         // begin simulating turns -  A turn entry contains a chr_id, their name and a timeline value for CTBStyleBar
         for (int i = 0; i < TURNS_TO_SHOW; i++) {
 
-            // get chr id of who has the turn at current point in simulation
-            int ChrIdWhoHasTurn = BattleUnits.FirstOrDefault(chr => chr.atb_remaining == 0)?.chr_id ?? 0;
-            
+            SimTurnEntry fallbackTurn = new SimTurnEntry();
+            fallbackTurn.chr_id = 0;
+            fallbackTurn.time = 0;
+            fallbackTurn.chr_name = "Yuna";
+            fallbackTurn.is_Targeted = false;
+
+            //ensure BattleUnits not empty before proceeding
+            if (BattleUnits.Count == 0) {
+
+                turn_order.Add(fallbackTurn);
+                return turn_order;
+
+            }
+
+            //var actingUnit = BattleUnits.FirstOrDefault(chr => chr.atb_remaining == 0);
+            var actingUnit = BattleUnits.OrderBy(chr => chr.atb_remaining).FirstOrDefault();
+
+            if (actingUnit == null) {
+                // try and handle gracefully
+                turn_order.Add(fallbackTurn);
+                return turn_order;
+            }
 
             SimTurnEntry turn = new SimTurnEntry();
-            turn.chr_id = (uint)ChrIdWhoHasTurn;
+            turn.chr_id = (uint)actingUnit.chr_id;
             turn.time = sim_time;
-            turn.chr_name = ReadChrName((uint)ChrIdWhoHasTurn);
-            turn.is_Targeted = BattleUnits.FirstOrDefault(chr => chr.chr_id == ChrIdWhoHasTurn).isTargeted == true;
+            turn.chr_name = actingUnit.chr_name;
+            turn.is_Targeted = actingUnit.isTargeted == true;
             turn_order.Add(turn);
             //Turn added to returned list of turn entries
 
@@ -128,13 +144,16 @@ public unsafe partial class ATBRecoveryModule : FhModule {
             bool com_strong_delay = (com_exp_data & 0x2000) != 0;           // is strong delay flag set?
             bool cmdDelaysNoSlow = (com_weak_delay || com_strong_delay) && !commandInflictsSlow; // Does the command only delay, no Slow statuse effect chance
 
+            bool cmdHasATBHealingOrDmg = (*(byte*)(cmd_base + 0x27)) == 4;  // Does the command target ATB
+            bool com_heals = ((com_dmg_data >> 4) & 1) != 0; // does the command restore, not damage HP, MP, or ATB
+
             foreach (var unit in BattleUnits) {
                 if (unit.isTargeted) {
                     int original_atb_rem = unit.atb_remaining;
-                    if (commandInflictsHaste) { unit.hasHaste = true; }// Update Haste bool
-                    if (commandInflictsSlow) { unit.hasSlow = true; }  // Update Slow bool
+                    if (commandInflictsHaste && !cmdHasATBHealingOrDmg) { unit.hasHaste = true; }// Update Haste bool
+                    if (commandInflictsSlow && !cmdHasATBHealingOrDmg) { unit.hasSlow = true; }  // Update Slow bool
 
-                    if (com_weak_delay) { 
+                    if (com_weak_delay) {
                         if (cmdDelaysNoSlow) { unit.atb_remaining += (int)WEAK_DELAY; }
                         if (commandInflictsSlow && !unit.hasSlow) { unit.atb_remaining += (int)WEAK_DELAY; }
                     }
@@ -143,9 +162,9 @@ public unsafe partial class ATBRecoveryModule : FhModule {
                         if (commandInflictsSlow && !unit.hasSlow) { unit.atb_remaining += (int)STRONG_DELAY; }
                     }
 
-                    bool cmdHasATBHealingOrDmg = (*(byte*)(cmd_base + 0x27)) == 4;  // Does the command target ATB
+                   
                     bool cmdTgtsATBNoHasteOrSlow = (cmdHasATBHealingOrDmg && !commandInflictsHaste && !commandInflictsSlow);
-                    bool com_heals = ((com_dmg_data >> 4) & 1) != 0;
+                    
 
                     if (cmdHasATBHealingOrDmg) {
                         byte cmd_power = *(byte*)(cmd_base + 0x2b);
@@ -171,19 +190,14 @@ public unsafe partial class ATBRecoveryModule : FhModule {
             }
 
 
-            // turn recovery -- calculate recovery for ChrIdWhoHasTurn
-            SimBattleUnit? considered_unit = BattleUnits.FirstOrDefault(chr => chr.chr_id == ChrIdWhoHasTurn);
+            //process turn - recovery time
             if (i == 0) {
-                if (considered_unit != null){
                     // update the units recovery time
-                    considered_unit.atb_remaining = SimGetATBRestTime((uint)ChrIdWhoHasTurn, hovered_command, true);
-                }
+                    actingUnit.atb_remaining = SimGetATBRestTime((uint)actingUnit.chr_id, hovered_command, true);
             }
             else {
-                if (considered_unit != null) {
                     // update the units recovery time
-                    considered_unit.atb_remaining = SimGetATBRestTime((uint)ChrIdWhoHasTurn, 0x2C30, false);
-                }
+                    actingUnit.atb_remaining = SimGetATBRestTime((uint)actingUnit.chr_id, 0x2C30, false);
             }
 
 
@@ -206,6 +220,11 @@ public unsafe partial class ATBRecoveryModule : FhModule {
     public int SimGetATBRestTime(uint chr_id, uint command_id, bool evaluate_spherechange) { 
         int recovery_time;
         SimBattleUnit? BattleUnit = BattleUnits.FirstOrDefault(chr => chr.chr_id == chr_id);
+        if (BattleUnit == null) { 
+            _logger.Info("SimGetATBRestTime: BattleUnit Null"); 
+            return 0; 
+        }
+
         int cmd_base_address = h_MsGetComData(command_id, (byte*)(0));
         int cmd_recovery_time = (int)(*(ushort*)(cmd_base_address + 0x22) * 10000);
         byte agility = (*(byte*)(BattleUnit.base_addr + 0x39a));

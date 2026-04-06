@@ -101,6 +101,62 @@ public unsafe class TbDebugModule : FhModule {
             ImGui.End();
 
             ImGui.Begin(
+            "Rikku Status Info",
+            ImGuiWindowFlags.NoFocusOnAppearing
+            );
+
+            nint Rchr_base = h_get_chr_addr(0);
+
+            int Rspeed1 = *(int*)(Rchr_base + 0x9e4);
+            ImGui.Text("Speed1 value: " + Rspeed1);
+            int Rspeed2 = *(int*)(Rchr_base + 0x9e8);
+            ImGui.Text("Speed2 value: " + Rspeed2);
+            int Rspeed3 = *(int*)(Rchr_base + 0x9ec);
+            ImGui.Text("Speed3 value: " + Rspeed3);
+            int Rspeed4 = *(int*)(Rchr_base + 0x9f0);
+            ImGui.Text("Speed4 value: " + Rspeed4);
+
+            int Rstatus_bitfield = *(int*)(Rchr_base + 0x450);
+            ImGui.Text("Status Bitfield value: " + Rstatus_bitfield);
+            sbyte Rprotect_timer = *(sbyte*)(Rchr_base + 0x439);
+            ImGui.Text("Protect turns left: " + Rprotect_timer);
+            sbyte Rhaste_timer = *(sbyte*)(Rchr_base + 0x43c);
+            ImGui.Text("Haste turns left: " + Rhaste_timer);
+            sbyte Rstop_timer = *(sbyte*)(Rchr_base + 0x43e);
+            ImGui.Text("Stop turns left: " + Rstop_timer);
+            sbyte Rdoom_count = *(sbyte*)(Rchr_base + 0x446);
+            ImGui.Text("Doom turns left: " + (Rdoom_count - 1));
+
+            sbyte Rregen_timer = *(sbyte*)(Rchr_base + 0x43b);
+            ImGui.Text("Regen turns left: " + Rregen_timer);
+            int Rregen_accumulator = *(int*)(Rchr_base + 0x688);
+            ImGui.Text("Regen accumulator value: " + Rregen_accumulator);
+            uint Rregen_threshold = *(uint*)(Rchr_base + 0x690);
+            ImGui.Text("Regen threshold value: " + Rregen_threshold);
+
+            int Rpoison_accumulator = *(int*)(Rchr_base + 0x684);
+            ImGui.Text("Poison accumulator value: " + Rpoison_accumulator);
+            uint Rpoison_threshold = *(uint*)(Rchr_base + 0x68c);
+            ImGui.Text("Poison threshold value: " + Rpoison_threshold);
+
+            uint Roff_count1 = *(uint*)(Rchr_base + 0x454);//death
+            ImGui.Text("off_count: death:  " + Roff_count1);
+            uint Roff_count2 = *(uint*)(Rchr_base + 0x458);//stone
+            ImGui.Text("off_count: stone:  " + Roff_count2);
+            uint Roff_count3 = *(uint*)(Rchr_base + 0x45c);//sleep
+            ImGui.Text("off_count: sleep:  " + Roff_count3);
+            uint Roff_count4 = *(uint*)(Rchr_base + 0x460);//silence
+            ImGui.Text("off_count: silence:  " + Roff_count4);
+            uint Roff_count5 = *(uint*)(Rchr_base + 0x464);//blind
+            uint Roff_count6 = *(uint*)(Rchr_base + 0x468);//poison
+            uint Roff_count7 = *(uint*)(Rchr_base + 0x46c);//confusion
+            ImGui.Text("off_count: confuse:  " + Roff_count7);
+            uint Roff_count8 = *(uint*)(Rchr_base + 0x470);//berserk
+            ImGui.Text("off_count: berserk:  " + Roff_count8);
+
+            ImGui.End();
+
+            ImGui.Begin(
                 "Paine Status Info",
                 ImGuiWindowFlags.NoFocusOnAppearing
                 );

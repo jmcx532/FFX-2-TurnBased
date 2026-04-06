@@ -31,9 +31,7 @@ public unsafe partial class ATBRecoveryModule : FhModule {
      * In reality, it checks a whole range of things, commands (item, command, monmagic), auto-abilities, Garment Grids*/
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public unsafe delegate int MsGetComData(uint command_id, byte* param_2);
-    //624cd0 - MsCheckRange
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    public delegate int clamp_between(int param_1, int param_2, int param_3);
+
 
     //6341a0
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -47,7 +45,6 @@ public unsafe partial class ATBRecoveryModule : FhModule {
     private readonly FhMethodHandle<MsCommandComplete> _MsCommandComplete_handle;
     private readonly FhMethodHandle<MsGetChr> _MsGetChr_handle;
     private readonly FhMethodHandle<MsGetComData> _MsGetComData_handle;
-    private readonly FhMethodHandle<clamp_between> _clamp_between_handle;
     private readonly FhMethodHandle<MsATBgetThinkingTime> _MsATBgetThinkingTime_handle;
     private readonly FhMethodHandle<TOBtlDrawATBGaude> _TOBtlDrawATBGaude_handle;
     protected readonly FhLogger recov_logger;
@@ -59,7 +56,7 @@ public unsafe partial class ATBRecoveryModule : FhModule {
         _MsATBgetRestTime_handle = new FhMethodHandle<MsATBgetRestTime>(this, "FFX-2.exe", 0x634140 - addr_offset, h_MsATBgetRestTime);
         _MsCommandComplete_handle = new FhMethodHandle<MsCommandComplete>(this, "FFX-2.exe", 0x6401c0 - addr_offset, h_MsCommandComplete);
         _MsGetComData_handle = new FhMethodHandle<MsGetComData>(this, "FFX-2.exe", 0x625160 - addr_offset, h_MsGetComData);
-        _clamp_between_handle = new FhMethodHandle<clamp_between>(this, "FFX-2.exe", 0x624cd0 - addr_offset, h_clamp_between);
+        _ClampBetween_handle = new FhMethodHandle<ClampBetween>(this, "FFX-2.exe", 0x624cd0 - addr_offset, h_clamp_between);
 
         _MsGetChr_handle = new FhMethodHandle<MsGetChr>(this, "FFX-2.exe", 0x611450 - addr_offset, h_MsGetChr);
 
@@ -90,13 +87,11 @@ public unsafe partial class ATBRecoveryModule : FhModule {
     //this function returns the base address for various Excel data types
     //param_1 is the command id (e.g 0x3002)
     public unsafe int h_MsGetComData(uint command_id, byte* param_2) {
-
-
         int result = _MsGetComData_handle.orig_fptr.Invoke(command_id, param_2);
         return result;
     }
     public int h_clamp_between(int param_1, int param_2, int param_3) {
-        return _clamp_between_handle.orig_fptr.Invoke(param_1, param_2, param_3);
+        return _ClampBetween_handle.orig_fptr.Invoke(param_1, param_2, param_3);
     }
     //remove thinking time, used to cause a bug with poison/regen, probably OK now, but don't need this mechanic
     public int h_MsATBgetThinkingTime(uint chr_id) {
@@ -295,7 +290,7 @@ public unsafe partial class ATBRecoveryModule : FhModule {
         _MsCommandComplete_handle.hook();
         _MsGetChr_handle.hook();
         _MsGetComData_handle.hook();
-        _clamp_between_handle.hook();
+        _ClampBetween_handle.hook();
 
         _MsATBgetThinkingTime_handle.hook();
         _TOBtlDrawATBGaude_handle.hook();
@@ -305,7 +300,6 @@ public unsafe partial class ATBRecoveryModule : FhModule {
         _MsStatCheckStop_handle.hook();
         _MsATBActiveCheck_handle.hook();
         _FUN_006218E0_handle.hook();
-        _ClampBetween_handle.hook();
         _FUN_00636690_handle.hook();
         _MsStructClear_handle.hook();
         _MsDamageBufferExe_handle.hook();

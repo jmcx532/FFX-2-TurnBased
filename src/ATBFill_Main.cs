@@ -99,6 +99,7 @@ public unsafe partial class ATBFillModule : FhModule {
     private readonly FhMethodHandle<MsCheckDanceStatus> _MsCheckDanceStatus_handle;
 
     private readonly FhMethodHandle<MsGetChr> _MsGetChr_handle;//611450
+    private readonly FhMethodHandle<MsGetComData> _MsGetComData_handle;
 
     public ATBFillModule() {
 
@@ -123,6 +124,7 @@ public unsafe partial class ATBFillModule : FhModule {
         _MsCheckDanceStatus_handle = new FhMethodHandle<MsCheckDanceStatus>(this, "FFX-2.exe", 0x636360 - addr_offset, h_MsCheckDanceStatus);
 
         _MsGetChr_handle = new FhMethodHandle<MsGetChr>(this, "FFX-2.exe", 0x611450 - addr_offset, h_MsGetChr);
+        _MsGetComData_handle = new FhMethodHandle<MsGetComData>(this, "FFX-2.exe", 0x625160 - addr_offset, h_MsGetComData);
 
         //Status Handles
         _MsStatCheckStop_handle = new FhMethodHandle<MsStatCheckStop>(this, "FFX-2.exe", 0x6430f0 - addr_offset, h_MsStatCheckStop);
@@ -450,11 +452,12 @@ public unsafe partial class ATBFillModule : FhModule {
                                         * If not stopped etc - returns 1
                                         * otherwise returns 0
                                          */
+
             //return early if character's ATB not allowed to fill
+            /* tentatively removed as the mod and custom_atb_progress() should handle statuses? - get's stuc
             if (fill_check_bravo == 0) {
                 goto LAB_RETURN;
-            }
-
+            }*/
 
             //custom ATB fill handling
             custom_atb_progress();
@@ -522,10 +525,10 @@ public unsafe partial class ATBFillModule : FhModule {
     LAB_RETURN:
         //write character state and return
         *(byte*)(iVar2 + 0xe68) = character_state;
-        TbSleepStopProcess(chr_id);
         return param_4;
     }
 
+    //function that rewrites how ATB Progress is handled
     //function that rewrites how ATB Progress is handled
     public void custom_atb_progress() {
         //define an array will hold a flag for each character that says whether their ATB can charge or not
@@ -533,51 +536,101 @@ public unsafe partial class ATBFillModule : FhModule {
         //an array to hold each characters time until ATB full value
         int[] atb_timer_values = new int[31];
 
-        //fill up arrays
-        for (int i = 0; i < can_fill_array.Length; i++) {
-            int chr_base_addr = h_MsGetChr((uint)i);
-            can_fill_array[i] = h_bravo_fx(chr_base_addr);
-            atb_timer_values[i] = *(int*)(chr_base_addr + 0x9d8);
+        bool chrCanAct = false;
 
-        }
+        do {
 
-        // Find lowest time remaining value of the characters whos ATBS are allowed to charge
-        int winningIndex = -1;
-        int bestValue = int.MaxValue;
-        //cycle through the chr can_fill array
-        for (int i = 0; i < can_fill_array.Length; i++) {
-            //where the character is allowed to fill, update time remaining variable
-            if (can_fill_array[i] == 1) {
-                int time_remaining = atb_timer_values[i];
-                //if the time remaining is lower than the current lowest recorded, update with the new lowest
-                if (time_remaining < bestValue) {
-                    bestValue = time_remaining;
-                    winningIndex = i;
-                }
-            }
-        }
-
-        //update ATBs
-        //If a at least 1 character's ATB is allowed to fill then
-        if (winningIndex != -1) {
-            //cycle through the Can_Fill array
+            //fill up arrays
             for (int i = 0; i < can_fill_array.Length; i++) {
-                /*where the character's ATB is allowed to fill, get their address and subtract the smallest
-                 * ATB Time remaining for all characters from their remaining ATB time*/
-                if (can_fill_array[i] == 1) {
-                    int chr_addr = h_MsGetChr((uint)i);
-                    *(int*)(chr_addr + 0x9d8) = *(int*)(chr_addr + 0x9d8) - bestValue;
+                int chr_base_addr = h_MsGetChr((uint)i);
+                can_fill_array[i] = h_bravo_fx(chr_base_addr); // fill up can_fill array
 
+                //alter can_fill array
+                if (can_fill_array[i] == 0) {
+                    //check for sleep
+                    if ((*(uint*)(chr_base_addr + 0x434) >> 2 & 1) == 1) {
+                        can_fill_array[i] = 1; // pretend they can fill
+                    }//check for stop
+                    if (*(sbyte*)(chr_base_addr + 0x43e) > 0) {
+                        can_fill_array[i] = 1; // pretend they can fill
+                    }
                 }
 
+                atb_timer_values[i] = *(int*)(chr_base_addr + 0x9d8); // fill up ATB timer values array
+
             }
-        }
-        else {
-            _fill_logger.Info("No characters eligible for ATB fill.");
-        }
-        //logging  
-        //_fill_logger.Info("Can fill array: " + string.Join("", can_fill));
-        //_fill_logger.Info("ATB remaining: " + string.Join(" / ", atb_timer_values));
+
+            // Find lowest time remaining value of the characters whos ATBS are allowed to charge
+            int winningIndex = -1;
+            int bestValue = int.MaxValue;
+            //cycle through the chr can_fill array
+            for (int i = 0; i < can_fill_array.Length; i++) {
+                //where the character is allowed to fill, update time remaining variable
+                if (can_fill_array[i] == 1) {
+                    int time_remaining = atb_timer_values[i];
+                    //if the time remaining is lower than the current lowest recorded, update with the new lowest
+                    if (time_remaining < bestValue) {
+                        bestValue = time_remaining;
+                        winningIndex = i;
+                    }
+                }
+            }
+
+            //update ATBs
+            //If a at least 1 character's ATB is allowed to fill then
+            if (winningIndex != -1) {
+                //cycle through the Can_Fill array
+                for (int i = 0; i < can_fill_array.Length; i++) {
+                    /*where the character's ATB is allowed to fill, get their address and subtract the smallest
+                     * ATB Time remaining for all characters from their remaining ATB time*/
+                    if (can_fill_array[i] == 1) {
+                        int chr_addr = h_MsGetChr((uint)i);
+                        *(int*)(chr_addr + 0x9d8) = *(int*)(chr_addr + 0x9d8) - bestValue;
+                    }
+                }
+
+                int winningIndexChrBase = h_MsGetChr((uint)winningIndex);
+
+                if (h_bravo_fx(winningIndexChrBase) == 1)
+                { 
+                    chrCanAct = true;
+                }
+                else {
+                    *(int*)(winningIndexChrBase + 0x9d8) = cannnotActRestTime((uint)winningIndex, 0x2C30);
+                    *(int*)(winningIndexChrBase + 0x9dc) = cannnotActRestTime((uint)winningIndex, 0x2C30);
+                    TbCantActStatusProcess((uint)winningIndex); // decrement their Sleep and Stop turns remaining.
+                }
+            }
+            else {
+                //_fill_logger.Info("No characters eligible for ATB fill.");
+                // This else block handles situations where NO character can act, due to debugs flags, or all being Asleep or Stopped.
+                
+                // Debug flag handling
+                bool dbg_allies_disabled = FhUtil.get_at<byte>(0x9F78BA) == 1;
+                bool dbg_enemies_disabled = FhUtil.get_at<byte>(0x9F78BB) == 1;
+                if(dbg_allies_disabled && dbg_enemies_disabled) { chrCanAct = true;  }
+
+                // Status handling
+                for (uint x = 0; x < atb_timer_values.Length; x++) {
+                    TbCantActStatusProcess(x);
+                    int chr_addr = h_MsGetChr(x);
+                    uint base_atb_value = FhUtil.get_at<uint>(0x9f8818);
+                    h_FUN_00634A20(x, chr_addr, base_atb_value); // recalculate the units ATB speed value - 0 -> no fill, 95 -> can fill again
+                    if (h_bravo_fx(chr_addr) == 1) { //h_bravo checks flags, and chrs ATB fill speed value
+                        chrCanAct = true;
+                        break;
+                    }
+                }
+            }
+            //logging  
+            //_fill_logger.Info("Can fill array: " + string.Join("", can_fill));
+            //_fill_logger.Info("ATB remaining: " + string.Join(" / ", atb_timer_values));
+
+
+        } while (!chrCanAct);
+
+
+
     }
 
     public unsafe uint h_FUN_00634A20(uint chr_id, int chr_base_addr, uint speed_value) {
@@ -635,6 +688,7 @@ public unsafe partial class ATBFillModule : FhModule {
         _MsGetRamChrMonster_handle.hook();
 
         _MsGetChr_handle.hook();
+        _MsGetComData_handle.hook();
 
         //Status Handling hooks
         _MsStatCheckStop_handle.hook();
