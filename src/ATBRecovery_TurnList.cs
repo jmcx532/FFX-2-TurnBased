@@ -1,4 +1,5 @@
 ﻿
+using System.Data;
 using TerraFX.Interop.Windows;
 
 namespace Fahrenheit.Modules.FFX2TurnBased;
@@ -12,8 +13,7 @@ public unsafe partial class ATBRecoveryModule : FhModule {
     const int ATB_LENGTH_OFFSET = 0x9DC;
 
     const uint TURNS_TO_SHOW = 16;
-    uint WEAK_DELAY = FhUtil.get_at<uint>(0x9f8ea0);
-    uint STRONG_DELAY = FhUtil.get_at<uint>(0x9f8ea4);
+    
 
     /* function that converts a character's raw ATB remaining value, into ticks - based on the games ATB Speed config value
      * that is fixed to 95 for Slow/Normal/Fast
@@ -33,12 +33,13 @@ public unsafe partial class ATBRecoveryModule : FhModule {
         public uint chr_id; 
         public int time; // at what point of simulation is the turn
         public string chr_name;
+        public bool is_Targeted;
 
-        public SimTurnEntry(uint chrId, int simTime, string chrName) {
+        public SimTurnEntry(uint chrId, int simTime, string chrName, bool isTargeted) {
             chr_id = chrId;
             time = simTime;
             chr_name = chrName;
-            
+            is_Targeted = isTargeted;
         }
     }
 
@@ -97,6 +98,7 @@ public unsafe partial class ATBRecoveryModule : FhModule {
             turn.chr_id = (uint)ChrIdWhoHasTurn;
             turn.time = sim_time;
             turn.chr_name = ReadChrName((uint)ChrIdWhoHasTurn);
+            turn.is_Targeted = BattleUnits.FirstOrDefault(chr => chr.chr_id == ChrIdWhoHasTurn).isTargeted == true;
             turn_order.Add(turn);
             //Turn added to returned list of turn entries
 
@@ -109,34 +111,60 @@ public unsafe partial class ATBRecoveryModule : FhModule {
             }
 
             int cmd_base = h_MsGetComData(hovered_command, (byte*)0);
-            bool commandInflictsHaste = *(byte*)(cmd_base + 0x4b) > 0;      // Does command inflict Haste
-            bool commandInflictsSlow = *(byte*)(cmd_base + 0x4c) > 0;       // Does command inflict Slow
-            uint com_exp_data = *(uint*)(cmd_base + 0x14);                  // get exp_data flags
+
             uint com_dmg_data = *(uint*)(cmd_base + 0x1c);                  // get damage flags
+            bool comHealsStatuses = ((com_dmg_data >> 5) & 1) != 0;
+            bool commandInflictsHaste = (*(byte*)(cmd_base + 0x4b) > 0) && !comHealsStatuses;      // Does command inflict Haste
+            bool commandInflictsSlow = (*(byte*)(cmd_base + 0x4c) > 0) && !comHealsStatuses;       // Does command inflict Slow
+
+            uint com_exp_data = *(uint*)(cmd_base + 0x14);                  // get exp_data flags
+            
+
+            uint WEAK_DELAY = FhUtil.get_at<uint>(0x9f8ea0);
+            uint STRONG_DELAY = FhUtil.get_at<uint>(0x9f8ea4);
+
+
             bool com_weak_delay = (com_exp_data & 0x1000) != 0;             // is weak delay flag set?
             bool com_strong_delay = (com_exp_data & 0x2000) != 0;           // is strong delay flag set?
-            
+            bool cmdDelaysNoSlow = (com_weak_delay || com_strong_delay) && !commandInflictsSlow; // Does the command only delay, no Slow statuse effect chance
+
             foreach (var unit in BattleUnits) {
                 if (unit.isTargeted) {
+                    int original_atb_rem = unit.atb_remaining;
                     if (commandInflictsHaste) { unit.hasHaste = true; }// Update Haste bool
                     if (commandInflictsSlow) { unit.hasSlow = true; }  // Update Slow bool
 
-                    if (com_weak_delay) { unit.atb_remaining += (int)WEAK_DELAY; }
-                    if (com_strong_delay) { unit.atb_remaining += (int)STRONG_DELAY; }
+                    if (com_weak_delay) { 
+                        if (cmdDelaysNoSlow) { unit.atb_remaining += (int)WEAK_DELAY; }
+                        if (commandInflictsSlow && !unit.hasSlow) { unit.atb_remaining += (int)WEAK_DELAY; }
+                    }
+                    if (com_strong_delay) {
+                        if (cmdDelaysNoSlow) { unit.atb_remaining += (int)STRONG_DELAY; }
+                        if (commandInflictsSlow && !unit.hasSlow) { unit.atb_remaining += (int)STRONG_DELAY; }
+                    }
 
                     bool cmdHasATBHealingOrDmg = (*(byte*)(cmd_base + 0x27)) == 4;  // Does the command target ATB
+                    bool cmdTgtsATBNoHasteOrSlow = (cmdHasATBHealingOrDmg && !commandInflictsHaste && !commandInflictsSlow);
                     bool com_heals = ((com_dmg_data >> 4) & 1) != 0;
 
                     if (cmdHasATBHealingOrDmg) {
                         byte cmd_power = *(byte*)(cmd_base + 0x2b);
                         float multiplier = (cmd_power / 16.0f);
-                        int original_atb_rem = unit.atb_remaining;
                         int amount_to_modify_by = (int)((float)original_atb_rem * multiplier);
+
                         if (com_heals) {
-                            unit.atb_remaining -= amount_to_modify_by;
+                            // Apply ATB healing only if Haste can actually be applied
+                            if (commandInflictsHaste && !unit.hasHaste) {
+                                unit.atb_remaining -= amount_to_modify_by;
+                            }
+                            if (cmdTgtsATBNoHasteOrSlow) { unit.atb_remaining -= amount_to_modify_by; }
                         }
                         else {
-                            unit.atb_remaining += amount_to_modify_by;
+                            // Apply ATB damage only if Slow can actually be applied
+                            if (commandInflictsSlow && !unit.hasSlow) {
+                                unit.atb_remaining += amount_to_modify_by;
+                            }
+                            if (cmdTgtsATBNoHasteOrSlow) { unit.atb_remaining += amount_to_modify_by; }
                         }
                     }
                 }
@@ -361,6 +389,25 @@ public unsafe partial class ATBRecoveryModule : FhModule {
         return System.Text.Encoding.ASCII.GetString(decoded_string.Slice(0, len));
     }
 
+    uint GetCharacterColor(int chrId) {
+        return chrId switch {
+            0 => ImGui.ColorConvertFloat4ToU32(new Vector4(1.0f, 0.25f, 0.55f, 1f)), // red/pink - Yuna
+            1 => ImGui.ColorConvertFloat4ToU32(new Vector4(1.0f, 0.63f, 0.04f, 1f)), // yellow - Rikku 
+            2 => ImGui.ColorConvertFloat4ToU32(new Vector4(0.5f, 0.4f, 1.0f, 1f)),   // purple - Paine
+            3 => ImGui.ColorConvertFloat4ToU32(new Vector4(0.6f, 0.15f, 0.3f, 1f)),   // darker pink - Pistil?
+            4 => ImGui.ColorConvertFloat4ToU32(new Vector4(0.6f, 0.15f, 0.3f, 1f)),   // darker pink - Pistil?
+            5 => ImGui.ColorConvertFloat4ToU32(new Vector4(1f, 0.8f, 0.3f, 1f)),   // gold - Smasher/Crusher?
+            6 => ImGui.ColorConvertFloat4ToU32(new Vector4(1f, 0.8f, 0.3f, 1f)),   // gold - Smasher/Crusher?
+            7 => ImGui.ColorConvertFloat4ToU32(new Vector4(0.4f, 0.25f, 0.65f, 1f)),   // darker purple - Dextral/Sinistral?
+            8 => ImGui.ColorConvertFloat4ToU32(new Vector4(0.4f, 0.25f, 0.65f, 1f)),   // gold - Dextral/Sinistral?
+            _ => ImGui.ColorConvertFloat4ToU32(new Vector4(0.8f, 0.8f, 0.8f, 1f)), // enemies / fallback
+        };
+    }
+
+    private int[] allowedSteps = new int[]
+{
+    -3, -2, -1, 0, 1, 2, 3, 4, 5
+};
 
     // TURN ORDER WINDOW RENDERING --------------------------------------------------
     public override void render_imgui() {
@@ -370,28 +417,193 @@ public unsafe partial class ATBRecoveryModule : FhModule {
         // if a player character has a turn - show the turn order window
         if (num_allies_ready != 0) {
 
+
+            ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0.18f, 0.28f, 0.15f, 0.92f)); // Green
+            ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(4, 2));
+            //ImGui.PushStyleVar(ImGuiStyleVar.Alpha, 0.5f);
+            
+
+            
+            ImGui.SetNextWindowSize(new Vector2(600, 60), ImGuiCond.Always);
+            // Turn list, musical staff style
             ImGui.Begin(
-                // doesn't grab focus, and you can't collapse the window
-                "Turn Order - Simulation approach",
+                "TurnOrderStaff",
+                ImGuiWindowFlags.NoTitleBar |
+                ImGuiWindowFlags.NoResize |
+                ImGuiWindowFlags.NoScrollbar |
+                ImGuiWindowFlags.NoScrollWithMouse |
                 ImGuiWindowFlags.NoFocusOnAppearing |
                 ImGuiWindowFlags.NoCollapse
             );
 
-            var SimTurnOrderList = TurnSimulation();
+            var draw = ImGui.GetWindowDrawList();
+            Vector2 canvasPos = ImGui.GetCursorScreenPos();
+            Vector2 canvasSize = ImGui.GetContentRegionAvail();
+            Vector2 pos = ImGui.GetWindowPos();
+            Vector2 size = ImGui.GetWindowSize();
+            float win_border_thickness = 4.0f;
 
-            float minValueS = SimTurnOrderList.Min(x => x.time);
-            float maxValueS = SimTurnOrderList.Max(x => x.time);
-            float rangeS = Math.Max(1f, maxValueS - minValueS);
+            // Colors with varying alpha
+            uint colLeft  = ImGui.GetColorU32(new Vector4(0.7f, 0.7f, 0f, 0.4f)); // low alpha
+            uint colMid   = ImGui.GetColorU32(new Vector4(0.7f, 0.7f, 0f, 1.0f)); // full alpha
+            uint colRight = ImGui.GetColorU32(new Vector4(0.7f, 0.7f, 0f, 0.4f)); // low alpha
 
-            foreach (var turnEntry in SimTurnOrderList) {
-                float normalized = (turnEntry.time - minValueS) / rangeS;
+            float y = pos.Y;
 
-                CTBStyleBar(1 - normalized, new Vector2(32, 28));
-                ImGui.SameLine();
-                ImGui.Text(turnEntry.chr_name);
+            // gradient - top window border
+            // Left half (fade in)
+            draw.AddRectFilledMultiColor(
+                new Vector2(pos.X, y),
+                new Vector2(pos.X + size.X * 0.5f, y + win_border_thickness),
+                colLeft, colMid, colMid, colLeft
+            );
+            // Right half (fade out)
+            draw.AddRectFilledMultiColor(
+                new Vector2(pos.X + size.X * 0.5f, y),
+                new Vector2(pos.X + size.X, y + win_border_thickness),
+                colMid, colRight, colRight, colMid
+            );
+            // gradient - bottom window border
+            float yBottom = pos.Y + size.Y - win_border_thickness; // keep it inside the window
+            // Left half (fade in)
+            draw.AddRectFilledMultiColor(
+                new Vector2(pos.X, yBottom),
+                new Vector2(pos.X + size.X * 0.5f, yBottom + win_border_thickness),
+                colLeft, colMid, colMid, colLeft
+            );
+            // Right half (fade out)
+            draw.AddRectFilledMultiColor(
+                new Vector2(pos.X + size.X * 0.5f, yBottom),
+                new Vector2(pos.X + size.X, yBottom + win_border_thickness),
+                colMid, colRight, colRight, colMid
+            );
+
+            // Background rectangle inside window? Do I need another one? 
+            /*
+            draw.AddRectFilled(
+                canvasPos,
+                canvasPos + canvasSize,
+                ImGui.ColorConvertFloat4ToU32(new Vector4(0.05f, 0.5f, 0.08f, 0.5f))
+            );*/
+
+            float padding = 4f;
+            float timelineStartX = canvasPos.X + padding;
+            float timelineEndX = canvasPos.X + canvasSize.X - padding;
+            float timelineWidth = timelineEndX - timelineStartX;
+
+            // Staff setup
+            float centerY = canvasPos.Y + canvasSize.Y * 0.5f;
+            float staffSpacing = 6f; // distance between lines
+
+            // Draw the 5 staff lines
+            for (int i = -2; i <= 2; i++) {
+                float y2 = centerY + i * staffSpacing;
+
+                draw.AddLine(
+                    new Vector2(timelineStartX, y2),
+                    new Vector2(timelineEndX, y2),
+                    ImGui.ColorConvertFloat4ToU32(new Vector4(0.7f, 0.7f, 0.8f, 0.2f))
+                );
             }
-            ImGui.End();
 
+            // Turn data
+            var turnList = TurnSimulation();
+
+            // ordered mapping
+            var orderedChars = turnList
+            .Select(t => (int)t.chr_id)
+            .Distinct()
+            .OrderBy(id => id)
+            .ToList();
+
+            Dictionary<int, int> pitchMapFrame = new();
+
+            for (int i = 0; i < orderedChars.Count; i++) {
+                int chrId = orderedChars[i];
+
+                int index = Math.Min(i, allowedSteps.Length - 1);
+                pitchMapFrame[chrId] = allowedSteps[index];
+            }
+
+            float minTime = turnList.Min(t => t.time);
+            float maxTime = turnList.Max(t => t.time);
+
+            float Normalize(float t) {
+                if (maxTime - minTime < 0.001f) return 0f;
+                return (t - minTime) / (maxTime - minTime);
+            }
+
+            // Draw notes
+            for (int i = 0; i < turnList.Count; i++) {
+                var entry = turnList[i];
+                int chrId = (int)entry.chr_id;
+
+                float norm = Normalize(entry.time);
+                float x = timelineStartX + norm * timelineWidth;
+
+                bool isTarget = turnList[i].is_Targeted;
+
+                float radius = isTarget ? 5.0f : 4.2f;
+                float pulse = (float)((Math.Sin(ImGui.GetTime() * 8) + 1) * 0.5);
+
+                if (isTarget) {
+                    radius += pulse * 1.2f;
+                }
+
+                uint color = GetCharacterColor(chrId);
+
+                int step = pitchMapFrame[chrId];
+
+                // Each step is half a staff spacing (lines + spaces)
+                float y3 = centerY + step * (staffSpacing * 0.5f);
+
+                // Draw note head
+                draw.AddCircleFilled(new Vector2(x, y3), radius, color, 16);
+
+                // Stem direction (like real notation)
+                float stemInset = 1.0f; // tweak this (0.3–1.0 range)
+                bool stemUp = step < 0;
+
+                // Base + pulse growth
+                float baseStemLength = 12.0f;
+                float extraStem = isTarget ? (pulse * 4.0f) : 0.0f; // tweak 6.0f for intensity
+                float stemLength = baseStemLength + extraStem;
+                float stem_thickness = isTarget ? (2.5f + pulse * 0.5f) : 2.5f;
+
+                if (stemUp) {
+                    draw.AddLine(
+                        new Vector2(x + radius - stemInset, y3),
+                        new Vector2(x + radius - stemInset, y3 - stemLength),
+                        color,
+                        stem_thickness
+                    );
+                }
+                else {
+                    draw.AddLine(
+                        new Vector2(x - radius + stemInset, y3),
+                        new Vector2(x - radius + stemInset, y3 + stemLength),
+                        color,
+                        stem_thickness
+                    );
+                }
+
+                // Optional: ledger lines if outside staff
+                if (step <= -5 || step >= 5) {
+                    float ledgerY = y3;
+
+                    draw.AddLine(
+                        new Vector2(x - 6, ledgerY),
+                        new Vector2(x + 6, ledgerY),
+                        ImGui.ColorConvertFloat4ToU32(new Vector4(0.8f, 0.8f, 0.9f, 0.3f)),
+                        1f
+                    );
+                }
+            }
+
+
+            ImGui.End();
+            ImGui.PopStyleVar(1);
+            ImGui.PopStyleColor(1);
         }
     }
 }

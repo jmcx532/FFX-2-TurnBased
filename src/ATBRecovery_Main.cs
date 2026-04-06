@@ -106,7 +106,10 @@ public unsafe partial class ATBRecoveryModule : FhModule {
     }
 
     public void h_TOBtlDrawATBGaude(int param_1, int param_2, int param_3) {
-        _TOBtlDrawATBGaude_handle.orig_fptr.Invoke(param_1, param_2, param_3);
+        return;
+
+
+        // _TOBtlDrawATBGaude_handle.orig_fptr.Invoke(param_1, param_2, param_3); // stub out to stop ATB gauges being drawn, or is a mkp function the actual drawer?
     }
 
     //MAIN FUNCTIONS---------------------------------------------------------------------------------------------------
