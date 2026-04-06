@@ -418,13 +418,11 @@ public unsafe partial class ATBRecoveryModule : FhModule {
         if (num_allies_ready != 0) {
 
 
-            ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0.18f, 0.28f, 0.15f, 0.92f)); // Green
+            ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0.18f, 0.28f, 0.15f, 0.0f)); // Green
             ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(4, 2));
-            //ImGui.PushStyleVar(ImGuiStyleVar.Alpha, 0.5f);
             
-
             
-            ImGui.SetNextWindowSize(new Vector2(600, 60), ImGuiCond.Always);
+            ImGui.SetNextWindowSize(new Vector2(585, 45), ImGuiCond.Always);
             // Turn list, musical staff style
             ImGui.Begin(
                 "TurnOrderStaff",
@@ -441,41 +439,22 @@ public unsafe partial class ATBRecoveryModule : FhModule {
             Vector2 canvasSize = ImGui.GetContentRegionAvail();
             Vector2 pos = ImGui.GetWindowPos();
             Vector2 size = ImGui.GetWindowSize();
-            float win_border_thickness = 4.0f;
 
-            // Colors with varying alpha
-            uint colLeft  = ImGui.GetColorU32(new Vector4(0.7f, 0.7f, 0f, 0.4f)); // low alpha
-            uint colMid   = ImGui.GetColorU32(new Vector4(0.7f, 0.7f, 0f, 1.0f)); // full alpha
-            uint colRight = ImGui.GetColorU32(new Vector4(0.7f, 0.7f, 0f, 0.4f)); // low alpha
+            // gradient background
+            uint bgLeft  = ImGui.GetColorU32(new Vector4(0.18f, 0.28f, 0.15f, 0.2f)); // low alpha
+            uint bgMid   = ImGui.GetColorU32(new Vector4(0.18f, 0.28f, 0.15f, 1.0f)); // full alpha
+            uint bgRight = ImGui.GetColorU32(new Vector4(0.18f, 0.28f, 0.15f, 0.2f)); // low alpha
 
-            float y = pos.Y;
+            draw.AddRectFilledMultiColor( // Left half
+                new Vector2(canvasPos.X, canvasPos.Y),
+                new Vector2(canvasPos.X + canvasSize.X * 0.5f),
+                bgLeft, bgMid, bgMid, bgLeft
+            );
 
-            // gradient - top window border
-            // Left half (fade in)
-            draw.AddRectFilledMultiColor(
-                new Vector2(pos.X, y),
-                new Vector2(pos.X + size.X * 0.5f, y + win_border_thickness),
-                colLeft, colMid, colMid, colLeft
-            );
-            // Right half (fade out)
-            draw.AddRectFilledMultiColor(
-                new Vector2(pos.X + size.X * 0.5f, y),
-                new Vector2(pos.X + size.X, y + win_border_thickness),
-                colMid, colRight, colRight, colMid
-            );
-            // gradient - bottom window border
-            float yBottom = pos.Y + size.Y - win_border_thickness; // keep it inside the window
-            // Left half (fade in)
-            draw.AddRectFilledMultiColor(
-                new Vector2(pos.X, yBottom),
-                new Vector2(pos.X + size.X * 0.5f, yBottom + win_border_thickness),
-                colLeft, colMid, colMid, colLeft
-            );
-            // Right half (fade out)
-            draw.AddRectFilledMultiColor(
-                new Vector2(pos.X + size.X * 0.5f, yBottom),
-                new Vector2(pos.X + size.X, yBottom + win_border_thickness),
-                colMid, colRight, colRight, colMid
+            draw.AddRectFilledMultiColor( // Right half
+            new Vector2(canvasPos.X + canvasSize.X * 0.5f, canvasPos.Y),
+            new Vector2(canvasPos.X + canvasSize.X, canvasPos.Y + canvasSize.Y),
+            bgMid, bgRight, bgRight, bgMid
             );
 
             // Background rectangle inside window? Do I need another one? 
@@ -486,6 +465,41 @@ public unsafe partial class ATBRecoveryModule : FhModule {
                 ImGui.ColorConvertFloat4ToU32(new Vector4(0.05f, 0.5f, 0.08f, 0.5f))
             );*/
 
+            // Draw top and bottom yellow gradient border
+            float win_border_thickness = 4.0f;
+            // Colors with varying alpha
+            uint colLeft  = ImGui.GetColorU32(new Vector4(0.7f, 0.7f, 0f, 0.4f)); // low alpha
+            uint colMid   = ImGui.GetColorU32(new Vector4(0.7f, 0.7f, 0f, 1.0f)); // full alpha
+            uint colRight = ImGui.GetColorU32(new Vector4(0.7f, 0.7f, 0f, 0.4f)); // low alpha
+
+            float y = pos.Y;
+
+            // gradient - top window border
+            draw.AddRectFilledMultiColor( // Left half
+                new Vector2(pos.X, y),
+                new Vector2(pos.X + size.X * 0.5f, y + win_border_thickness),
+                colLeft, colMid, colMid, colLeft
+            );
+            draw.AddRectFilledMultiColor( // Right half
+                new Vector2(pos.X + size.X * 0.5f, y),
+                new Vector2(pos.X + size.X, y + win_border_thickness),
+                colMid, colRight, colRight, colMid
+            );
+            // gradient - bottom window border
+            float yBottom = pos.Y + size.Y - win_border_thickness;
+            draw.AddRectFilledMultiColor( //Left half
+                new Vector2(pos.X, yBottom),
+                new Vector2(pos.X + size.X * 0.5f, yBottom + win_border_thickness),
+                colLeft, colMid, colMid, colLeft
+            );
+            draw.AddRectFilledMultiColor( // Right half
+                new Vector2(pos.X + size.X * 0.5f, yBottom),
+                new Vector2(pos.X + size.X, yBottom + win_border_thickness),
+                colMid, colRight, colRight, colMid
+            );
+
+            
+            // Start drawing musical notes sheet
             float padding = 4f;
             float timelineStartX = canvasPos.X + padding;
             float timelineEndX = canvasPos.X + canvasSize.X - padding;
@@ -557,8 +571,6 @@ public unsafe partial class ATBRecoveryModule : FhModule {
                 // Each step is half a staff spacing (lines + spaces)
                 float y3 = centerY + step * (staffSpacing * 0.5f);
 
-                // Draw note head
-                draw.AddCircleFilled(new Vector2(x, y3), radius, color, 16);
 
                 // Stem direction (like real notation)
                 float stemInset = 1.0f; // tweak this (0.3–1.0 range)
@@ -570,6 +582,31 @@ public unsafe partial class ATBRecoveryModule : FhModule {
                 float stemLength = baseStemLength + extraStem;
                 float stem_thickness = isTarget ? (2.5f + pulse * 0.5f) : 2.5f;
 
+                // draw note head outline
+                uint note_outline_color  = ImGui.GetColorU32(new Vector4(0f, 0f, 0f, 0.5f));
+                draw.AddCircleFilled(new Vector2(x, y3), radius + 1.0f, note_outline_color, 16);
+
+                //draw stem outline
+                if (stemUp) {
+                    draw.AddLine(
+                        new Vector2(x + radius - stemInset, y3),
+                        new Vector2(x + radius - stemInset, y3 - stemLength - 0.5f),
+                        note_outline_color,
+                        stem_thickness + 2.0f
+                    );
+                } else {
+                    draw.AddLine(
+                        new Vector2(x - radius + stemInset, y3),
+                        new Vector2(x - radius + stemInset, y3 + stemLength + 0.5f),
+                        note_outline_color,
+                        stem_thickness + 2.0f
+                        );
+                }
+
+                 // Draw note head
+                 draw.AddCircleFilled(new Vector2(x, y3), radius, color, 16);
+
+                // draw stem
                 if (stemUp) {
                     draw.AddLine(
                         new Vector2(x + radius - stemInset, y3),
