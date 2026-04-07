@@ -1,7 +1,6 @@
-﻿using static Fahrenheit.Modules.FFX2TurnBased.ATBRecoveryModule;
+﻿using static Fahrenheit.Modules.FFX2TurnBased.ATBRecoveryModule; // allows this to use DamageBuffer struct defined in ATBRecovery_StatusHandling.cs
 
 namespace Fahrenheit.Modules.FFX2TurnBased;
-
 
 public unsafe partial class ATBFillModule : FhModule {
 

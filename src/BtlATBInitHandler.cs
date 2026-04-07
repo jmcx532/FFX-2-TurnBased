@@ -188,7 +188,7 @@ public unsafe class PreEmptiveModule : FhModule {
     }
 
 
-    //Tb -handle case where multiple characters may have First Strike - TEST AMBUSH - DOES FIRST STRIKE CORRECTLY GIVE PRIORITY?
+    //Tb -handle case where multiple characters may have First Strike
     public uint h_MsChrAtbInit(int chr_base_address, int param_2, int param_3) {
         uint original_result = _MsChrAtbInit_handle.orig_fptr.Invoke(chr_base_address, param_2, param_3);
 
@@ -222,11 +222,6 @@ public unsafe class PreEmptiveModule : FhModule {
         }
    
      }
-
-    
-    
-
-
 
 
     public override bool init(FhModContext mod_context, FileStream global_state_file) {

@@ -13,7 +13,7 @@ namespace Fahrenheit.Modules.FFX2TurnBased;
 [FhLoad(FhGameId.FFX2)]
 public unsafe partial class ATBRecoveryModule : FhModule {
 
-    const ushort spherechange_atb_cost = 20;
+    const ushort SPHERECHANGE_ATB_COST = 20;
 
     //function delegates
     //634140 - MsATBgetRestTime
@@ -100,10 +100,9 @@ public unsafe partial class ATBRecoveryModule : FhModule {
         return 0;
     }
 
+    // Stub out to prevent ATB Gauges from being drawn
     public void h_TOBtlDrawATBGaude(int param_1, int param_2, int param_3) {
         return;
-
-
         // _TOBtlDrawATBGaude_handle.orig_fptr.Invoke(param_1, param_2, param_3); // stub out to stop ATB gauges being drawn, or is a mkp function the actual drawer?
     }
 
@@ -252,7 +251,7 @@ public unsafe partial class ATBRecoveryModule : FhModule {
         if (*(byte*)(chr_base + 0xF3D) == 0x50) {
             // overwrite ATB time remaining -- simulates a command with atb_cost of 20 - half as much wait as an item
             byte agility = *(byte*)(chr_base + 0x39a);
-            int atb_length = (spherechange_atb_cost * 10000) / (agility + 1);
+            int atb_length = (SPHERECHANGE_ATB_COST * 10000) / (agility + 1);
             if ( *(sbyte*)(chr_base + 0x4b8) > 0) { atb_length = atb_length / 2; }//haste also halves recovery time on spherchange
             if (*(sbyte*)(chr_base + 0x4b9) > 0) { atb_length = atb_length * 2; }//slow also doubles recovery time on spherchange
 

@@ -4,8 +4,8 @@
  * calculating the lowest atb_remaining value between applicable characters and
  * deduct that value from everybodies atb_remaining.
  * 
- * Pairs up with ATBFill_StatusHandling.cs which has special handling for Sleep/Stop
- * 
+ * Pairs up with ATBFill_StatusHandling.cs which has special handling
+ * for statuses that prevent character's from acting.
  */
 
 namespace Fahrenheit.Modules.FFX2TurnBased;
@@ -165,11 +165,9 @@ public unsafe partial class ATBFillModule : FhModule {
     public uint h_MsAutoBerserkProcess(uint chr_id, int chr_base_address) {
         return _MsAutoBerserkProcess_handle.orig_fptr.Invoke(chr_id, chr_base_address);
     }
-
     public uint h_MsGetRamChrMonster(uint chr_id) {
         return _MsGetRamChrMonster_handle.orig_fptr.Invoke(chr_id);
     }
-
     public int h_bravo_fx(int param_1) {
         return _bravo_fx_handle.orig_fptr.Invoke(param_1);
     }
@@ -186,6 +184,7 @@ public unsafe partial class ATBFillModule : FhModule {
         return _MsCheckDanceStatus_handle.orig_fptr.Invoke(param_1);
     }
 
+    // vanilla implementation ready for changes if required -- NOT HOOKED, uncomment in init() if required.
     public void h_MsChrATBprocess() {
         uint uVar1;
         byte cVar2;
@@ -454,7 +453,7 @@ public unsafe partial class ATBFillModule : FhModule {
                                          */
 
             //return early if character's ATB not allowed to fill
-            /* tentatively removed as the mod and custom_atb_progress() should handle statuses? - get's stuc
+            /* tentatively removed as the mod and custom_atb_progress() should handle statuses? - 06/04/2026
             if (fill_check_bravo == 0) {
                 goto LAB_RETURN;
             }*/
@@ -528,7 +527,6 @@ public unsafe partial class ATBFillModule : FhModule {
         return param_4;
     }
 
-    //function that rewrites how ATB Progress is handled
     //function that rewrites how ATB Progress is handled
     public void custom_atb_progress() {
         //define an array will hold a flag for each character that says whether their ATB can charge or not
@@ -629,10 +627,9 @@ public unsafe partial class ATBFillModule : FhModule {
 
         } while (!chrCanAct);
 
-
-
     }
 
+    // Calcs character's underlying speed values, handled Haste/Slow fill speed multiplier in vanilla, as well as on hit ATB slowdown - effects removed
     public unsafe uint h_FUN_00634A20(uint chr_id, int chr_base_addr, uint speed_value) {
 
         uint uVar1;
@@ -675,7 +672,7 @@ public unsafe partial class ATBFillModule : FhModule {
 
     public override bool init(FhModContext mod_context, FileStream global_state_file) {
         // ATB fill hooks
-        _MsChrATBprocess_handle.hook();
+        //_MsChrATBprocess_handle.hook();
         _msChrATBprocess_handle.hook();
         _FUN_00634A20_handle.hook();
         _MsMagicCheckCommandExe_handle.hook();
