@@ -1,7 +1,4 @@
 ﻿
-using System.Data;
-using TerraFX.Interop.Windows;
-
 namespace Fahrenheit.Modules.FFX2TurnBased;
 
 public unsafe partial class ATBRecoveryModule : FhModule {
@@ -14,14 +11,6 @@ public unsafe partial class ATBRecoveryModule : FhModule {
 
     const uint TURNS_TO_SHOW = 16;
     
-
-    /* function that converts a character's raw ATB remaining value, into ticks - based on the games ATB Speed config value
-     * that is fixed to 95 for Slow/Normal/Fast
-     * 
-     * Used for character's immediate next turn -- include the character who currently has the turn
-     * This and the next function use 1050 because 1050 * 95 = 99750 , and the ATB calculation clamps largest possible value to 99999
-     * though it never goes this high in practice
-     */
     int ReadATBValue(uint chr_id) {
         int chr_base_addr = h_MsGetChr(chr_id);
         int atb_remaining = *(int*)(chr_base_addr + ATB_REMAIN_OFFSET);
@@ -73,7 +62,7 @@ public unsafe partial class ATBRecoveryModule : FhModule {
             chr.chr_name = ReadChrName((uint)chr.chr_id);
             chr.atb_remaining = ReadATBValue((uint)chr.chr_id);
             chr.hasHpRemaining = *(int*)(chr.base_addr + 0x3b4) > 0;
-            chr.isActualUnit = *(byte*)(chr.base_addr + 0x1784) == 1;
+            chr.isActualUnit = *(byte*)(chr.base_addr + 0x1784) == 1 && *(byte*)(chr.base_addr + 0x1788) == 1;
 
             chr.hasHaste = *(sbyte*)(chr.base_addr + 0x43c) != 0;
             chr.hasSlow = *(sbyte*)(chr.base_addr + 0x43d) != 0;
@@ -90,15 +79,34 @@ public unsafe partial class ATBRecoveryModule : FhModule {
         // begin simulating turns -  A turn entry contains a chr_id, their name and a timeline value for CTBStyleBar
         for (int i = 0; i < TURNS_TO_SHOW; i++) {
 
-            // get chr id of who has the turn at current point in simulation
-            int ChrIdWhoHasTurn = BattleUnits.FirstOrDefault(chr => chr.atb_remaining == 0)?.chr_id ?? 0;
-            
+            SimTurnEntry fallbackTurn = new SimTurnEntry();
+            fallbackTurn.chr_id = 0;
+            fallbackTurn.time = 0;
+            fallbackTurn.chr_name = "Yuna";
+            fallbackTurn.is_Targeted = false;
+
+            //ensure BattleUnits not empty before proceeding
+            if (BattleUnits.Count == 0) {
+
+                turn_order.Add(fallbackTurn);
+                return turn_order;
+
+            }
+
+            //var actingUnit = BattleUnits.FirstOrDefault(chr => chr.atb_remaining == 0);
+            var actingUnit = BattleUnits.OrderBy(chr => chr.atb_remaining).FirstOrDefault();
+
+            if (actingUnit == null) {
+                // try and handle gracefully
+                turn_order.Add(fallbackTurn);
+                return turn_order;
+            }
 
             SimTurnEntry turn = new SimTurnEntry();
-            turn.chr_id = (uint)ChrIdWhoHasTurn;
+            turn.chr_id = (uint)actingUnit.chr_id;
             turn.time = sim_time;
-            turn.chr_name = ReadChrName((uint)ChrIdWhoHasTurn);
-            turn.is_Targeted = BattleUnits.FirstOrDefault(chr => chr.chr_id == ChrIdWhoHasTurn).isTargeted == true;
+            turn.chr_name = actingUnit.chr_name;
+            turn.is_Targeted = actingUnit.isTargeted == true;
             turn_order.Add(turn);
             //Turn added to returned list of turn entries
 
@@ -128,13 +136,16 @@ public unsafe partial class ATBRecoveryModule : FhModule {
             bool com_strong_delay = (com_exp_data & 0x2000) != 0;           // is strong delay flag set?
             bool cmdDelaysNoSlow = (com_weak_delay || com_strong_delay) && !commandInflictsSlow; // Does the command only delay, no Slow statuse effect chance
 
+            bool cmdHasATBHealingOrDmg = (*(byte*)(cmd_base + 0x27)) == 4;  // Does the command target ATB
+            bool com_heals = ((com_dmg_data >> 4) & 1) != 0; // does the command restore, not damage HP, MP, or ATB
+
             foreach (var unit in BattleUnits) {
                 if (unit.isTargeted) {
                     int original_atb_rem = unit.atb_remaining;
-                    if (commandInflictsHaste) { unit.hasHaste = true; }// Update Haste bool
-                    if (commandInflictsSlow) { unit.hasSlow = true; }  // Update Slow bool
+                    if (commandInflictsHaste && !cmdHasATBHealingOrDmg) { unit.hasHaste = true; }// Update Haste bool
+                    if (commandInflictsSlow && !cmdHasATBHealingOrDmg) { unit.hasSlow = true; }  // Update Slow bool
 
-                    if (com_weak_delay) { 
+                    if (com_weak_delay) {
                         if (cmdDelaysNoSlow) { unit.atb_remaining += (int)WEAK_DELAY; }
                         if (commandInflictsSlow && !unit.hasSlow) { unit.atb_remaining += (int)WEAK_DELAY; }
                     }
@@ -143,9 +154,9 @@ public unsafe partial class ATBRecoveryModule : FhModule {
                         if (commandInflictsSlow && !unit.hasSlow) { unit.atb_remaining += (int)STRONG_DELAY; }
                     }
 
-                    bool cmdHasATBHealingOrDmg = (*(byte*)(cmd_base + 0x27)) == 4;  // Does the command target ATB
+                   
                     bool cmdTgtsATBNoHasteOrSlow = (cmdHasATBHealingOrDmg && !commandInflictsHaste && !commandInflictsSlow);
-                    bool com_heals = ((com_dmg_data >> 4) & 1) != 0;
+                    
 
                     if (cmdHasATBHealingOrDmg) {
                         byte cmd_power = *(byte*)(cmd_base + 0x2b);
@@ -171,19 +182,14 @@ public unsafe partial class ATBRecoveryModule : FhModule {
             }
 
 
-            // turn recovery -- calculate recovery for ChrIdWhoHasTurn
-            SimBattleUnit? considered_unit = BattleUnits.FirstOrDefault(chr => chr.chr_id == ChrIdWhoHasTurn);
+            //process turn - recovery time
             if (i == 0) {
-                if (considered_unit != null){
                     // update the units recovery time
-                    considered_unit.atb_remaining = SimGetATBRestTime((uint)ChrIdWhoHasTurn, hovered_command, true);
-                }
+                    actingUnit.atb_remaining = SimGetATBRestTime((uint)actingUnit.chr_id, hovered_command, true);
             }
             else {
-                if (considered_unit != null) {
                     // update the units recovery time
-                    considered_unit.atb_remaining = SimGetATBRestTime((uint)ChrIdWhoHasTurn, 0x2C30, false);
-                }
+                    actingUnit.atb_remaining = SimGetATBRestTime((uint)actingUnit.chr_id, 0x2C30, false);
             }
 
 
@@ -206,6 +212,11 @@ public unsafe partial class ATBRecoveryModule : FhModule {
     public int SimGetATBRestTime(uint chr_id, uint command_id, bool evaluate_spherechange) { 
         int recovery_time;
         SimBattleUnit? BattleUnit = BattleUnits.FirstOrDefault(chr => chr.chr_id == chr_id);
+        if (BattleUnit == null) { 
+            _logger.Info("SimGetATBRestTime: BattleUnit Null"); 
+            return 0; 
+        }
+
         int cmd_base_address = h_MsGetComData(command_id, (byte*)(0));
         int cmd_recovery_time = (int)(*(ushort*)(cmd_base_address + 0x22) * 10000);
         byte agility = (*(byte*)(BattleUnit.base_addr + 0x39a));
@@ -273,7 +284,7 @@ public unsafe partial class ATBRecoveryModule : FhModule {
                 float ac4f = ac4 == 0 ? 1f : ac4;
                 float ds_agility = (chr_level * ac0f) + ((chr_level / ac1f) + ac2) - ((chr_level * chr_level) / 16f / ac3f / ac4f);
 
-                recovery_time = (int)((spherechange_atb_cost * 10000) / (ds_agility + 1f));
+                recovery_time = (int)((SPHERECHANGE_ATB_COST * 10000) / (ds_agility + 1f));
                 if (BattleUnit.hasHaste) { recovery_time = recovery_time / 2; }
                 if (BattleUnit.hasSlow) { recovery_time = recovery_time * 2; }
             }
@@ -325,48 +336,7 @@ public unsafe partial class ATBRecoveryModule : FhModule {
             : main;
     }
 
-    // CTB Style widget ----------------------------
-    void CTBStyleBar(float normalized_value, Vector2 size) {
-
-        var draw = ImGui.GetWindowDrawList();
-        Vector2 pos = ImGui.GetCursorScreenPos();
-
-        // thresholds for each visual layer
-        float[] layers = { 0f, 0.2f, 0.4f, .6f, 0.8f };
-
-        Vector4[] colors =
-    {
-        new Vector4(0.20f, 0.00f, 0.35f, 1f), // deep purple
-        new Vector4(0.35f, 0.05f, 0.55f, 1f),
-        new Vector4(0.55f, 0.15f, 0.75f, 1f),
-        new Vector4(0.75f, 0.30f, 0.90f, 1f),
-        new Vector4(0.90f, 0.60f, 1.00f, 1f)  // brightest
-    };
-
-        uint bg = ImGui.GetColorU32(new Vector4(0.05f, 0.02f, 0.08f, 1));
-
-        draw.AddRectFilled(pos, pos + size, bg);
-
-        for (int i = 0; i < layers.Length; i++) {
-            // Adjust the fill logic based on the new max value
-            float fill = Math.Clamp((normalized_value - layers[i]) / (1f - layers[i]), 0f, 1f);
-
-            if (fill <= 0f)
-                continue;
-
-            Vector2 fillMax = pos + new Vector2(size.X * fill, size.Y);
-
-            draw.AddRectFilled(
-                pos,
-                fillMax,
-                ImGui.GetColorU32(colors[i])
-            );
-        }
-
-        ImGui.Dummy(size);
-    }
-
-    //function to read character's name string
+    //function to read character's name string, stored in BattleUnit - keep for debugging
     public unsafe string ReadChrName(uint chr_id) {
         int chr_base_addr = h_MsGetChr(chr_id);
         //pointer to start of Chr name string
@@ -420,6 +390,7 @@ public unsafe partial class ATBRecoveryModule : FhModule {
 
             ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0.18f, 0.28f, 0.15f, 0.0f)); // Green
             ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(4, 2));
+            ImGui.PushStyleVar(ImGuiStyleVar.WindowBorderSize, 0.0f);
             
             
             ImGui.SetNextWindowSize(new Vector2(585, 45), ImGuiCond.Always);
@@ -457,16 +428,9 @@ public unsafe partial class ATBRecoveryModule : FhModule {
             bgMid, bgRight, bgRight, bgMid
             );
 
-            // Background rectangle inside window? Do I need another one? 
-            /*
-            draw.AddRectFilled(
-                canvasPos,
-                canvasPos + canvasSize,
-                ImGui.ColorConvertFloat4ToU32(new Vector4(0.05f, 0.5f, 0.08f, 0.5f))
-            );*/
 
             // Draw top and bottom yellow gradient border
-            float win_border_thickness = 4.0f;
+            float win_border_thickness = 2.5f;
             // Colors with varying alpha
             uint colLeft  = ImGui.GetColorU32(new Vector4(0.7f, 0.7f, 0f, 0.4f)); // low alpha
             uint colMid   = ImGui.GetColorU32(new Vector4(0.7f, 0.7f, 0f, 1.0f)); // full alpha
@@ -639,7 +603,7 @@ public unsafe partial class ATBRecoveryModule : FhModule {
 
 
             ImGui.End();
-            ImGui.PopStyleVar(1);
+            ImGui.PopStyleVar(2);
             ImGui.PopStyleColor(1);
         }
     }

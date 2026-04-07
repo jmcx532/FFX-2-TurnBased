@@ -100,15 +100,9 @@ public unsafe partial class ATBRecoveryModule : FhModule {
         uint uVar6;
         short sVar1;
         uint local_48;
-        //uint local_18;
-        //int local_14;
-        /*byte[] local_1c [4]; -- original Ghidra decomp */
-        //byte[] local_1c = new byte[0x14]; - moved locally to PSN/Regen handling
-
-        /* Old, start of turn status handling
-        uint chr_id = ChrIdOfWhoHasTurn();// get chr_id of who has the turn
-        if (chr_id == 0xffffffff) {  return; }// if valid chr_id not returned, abort
-        */
+        /*byte[] local_1c [4]; -- original Ghidra decomp 
+         * is DamageBuffer for PSN/RGN
+         */
 
         int chr_base = h_MsGetChr(chr_id);
 
@@ -391,23 +385,8 @@ public unsafe partial class ATBRecoveryModule : FhModule {
         } while (true);
     }
 
-    /*
-    public uint ChrIdOfWhoHasTurn() {
-        for (uint i = 0; i < 0x1f; i++) {
-            int test_chr_base = h_MsGetChr(i);
-            byte actual_unit = *(byte*)(test_chr_base + 0x1784);
-            int remaining_hp = *(int*)(test_chr_base + 0x3b4);
-            int atb_remaining = *(int*)(test_chr_base + 0x9d8);
-
-            if (atb_remaining < 1 && actual_unit == 1 && remaining_hp > 0) {
-                return i;
-            }
-        }
-        return 0xffffffff;
-    }*/
-
     // Hooked function handling
-    //MsStatusProcess now only handles Sleep and Stop
+    //MsStatusProcess nixed
     public void h_MsStatusProcess() {
         return;
     }
