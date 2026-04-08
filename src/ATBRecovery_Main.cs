@@ -13,7 +13,7 @@ namespace Fahrenheit.Modules.FFX2TurnBased;
 [FhLoad(FhGameId.FFX2)]
 public unsafe partial class ATBRecoveryModule : FhModule {
 
-    const ushort SPHERECHANGE_ATB_COST = 20;
+    const ushort SPHERECHANGE_ATB_COST = 40;
 
     //function delegates
     //634140 - MsATBgetRestTime
