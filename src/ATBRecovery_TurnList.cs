@@ -189,7 +189,7 @@ public unsafe partial class ATBRecoveryModule : FhModule {
             }
             else {
                     // update the units recovery time
-                    actingUnit.atb_remaining = SimGetATBRestTime((uint)actingUnit.chr_id, 0x2C30, false);
+                    actingUnit.atb_remaining = SimGetATBRestTime((uint)actingUnit.chr_id, 0x302C, false);
             }
 
 

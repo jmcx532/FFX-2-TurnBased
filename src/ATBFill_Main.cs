@@ -17,6 +17,7 @@ public unsafe partial class ATBFillModule : FhModule {
 
     protected readonly FhLogger _fill_logger;
 
+
     //delegates
     //6343d0 - MsChrATBprocess
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -594,8 +595,8 @@ public unsafe partial class ATBFillModule : FhModule {
                     chrCanAct = true;
                 }
                 else {
-                    *(int*)(winningIndexChrBase + 0x9d8) = cannnotActRestTime((uint)winningIndex, 0x2C30);
-                    *(int*)(winningIndexChrBase + 0x9dc) = cannnotActRestTime((uint)winningIndex, 0x2C30);
+                    *(int*)(winningIndexChrBase + 0x9d8) = cannnotActRestTime((uint)winningIndex, 0x302c);
+                    *(int*)(winningIndexChrBase + 0x9dc) = cannnotActRestTime((uint)winningIndex, 0x302c);
                     TbCantActStatusProcess((uint)winningIndex); // decrement their Sleep and Stop turns remaining.
                 }
             }
