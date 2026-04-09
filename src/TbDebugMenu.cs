@@ -8,6 +8,9 @@ public delegate nint get_chr_addr(uint chr_id);
 
 [FhLoad(FhGameId.FFX2)]
 public unsafe class TbDebugModule : FhModule {
+
+    bool showMenu = false;
+
     //protected readonly FhLogger _logger;
     private readonly FhMethodHandle<get_chr_addr> _get_chr_addr_handle;
 
@@ -22,7 +25,7 @@ public unsafe class TbDebugModule : FhModule {
 
         // Check if Battle Chr pointer is set
         int* chr_structs_ptr = FhUtil.ptr_at<int>(0xA0FBAC);
-        if (*chr_structs_ptr != 0) {
+        if (*chr_structs_ptr != 0 && showMenu) {
 
             ImGui.Begin(
                 "Turn-based Debug",

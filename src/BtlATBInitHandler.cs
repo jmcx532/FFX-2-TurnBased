@@ -196,8 +196,10 @@ public unsafe class PreEmptiveModule : FhModule {
         if (original_result == 0xffffffff) {
             //if First Strike flag bit is set
             if ((*(byte*)(chr_base_address + 0x650) & 1) != 0) {
-                //overwrite ATB Time left to be their character ID -> 0, 1 or 2
-                *(int*)(chr_base_address + 0x9d8) = *(byte*)(chr_base_address + 0xC);
+                //overwrite ATB Time left to be their character ID -> 0, 1 or 2 - If they haven't been KOed by the previous attack
+                if ( (*(int*)(chr_base_address + 0x434) & 1) == 1) {
+                    *(int*)(chr_base_address + 0x9d8) = *(byte*)(chr_base_address + 0xC);
+                }
             }
         }
         

@@ -1,4 +1,6 @@
 ﻿
+using TerraFX.Interop.Windows;
+
 namespace Fahrenheit.Modules.FFX2TurnBased;
 
 public unsafe partial class ATBRecoveryModule : FhModule {
@@ -34,11 +36,13 @@ public unsafe partial class ATBRecoveryModule : FhModule {
 
     class SimBattleUnit {
         public int chr_id;
+        public ushort mon_id;              // is 0 for player characters, is 0x1xxx for enemies
         public int base_addr;
         public string chr_name;
         public int atb_remaining;          // current time_remaining
         public bool hasHpRemaining;
         public bool isActualUnit;
+        public bool excludeWatcher;
 
         // Status flags
         public bool hasHaste;
@@ -59,15 +63,20 @@ public unsafe partial class ATBRecoveryModule : FhModule {
             SimBattleUnit chr = new SimBattleUnit();
             chr.chr_id = i;
             chr.base_addr = h_MsGetChr((uint)i);
+            chr.mon_id = *(ushort*)(chr.base_addr + 0xe);
             chr.chr_name = ReadChrName((uint)chr.chr_id);
             chr.atb_remaining = ReadATBValue((uint)chr.chr_id);
             chr.hasHpRemaining = *(int*)(chr.base_addr + 0x3b4) > 0;
-            chr.isActualUnit = *(byte*)(chr.base_addr + 0x1784) == 1 && *(byte*)(chr.base_addr + 0x1788) == 1;
+            chr.isActualUnit = *(byte*)(chr.base_addr + 0x1784) == 1;
+            // check Watcher mon id, and if flag is 0
+            if ((chr.mon_id == 0x10A1 || chr.mon_id == 0x10E9 || chr.mon_id == 0x10EA) && (*(byte*)(chr.base_addr + 0x1788) == 0)) {
+                chr.excludeWatcher = true;
+            }
 
             chr.hasHaste = *(sbyte*)(chr.base_addr + 0x43c) != 0;
             chr.hasSlow = *(sbyte*)(chr.base_addr + 0x43d) != 0;
 
-            if (chr.isActualUnit && chr.hasHpRemaining) {
+            if (chr.isActualUnit && chr.hasHpRemaining && !chr.excludeWatcher) {
                 BattleUnits.Add(chr);
             }
         }
