@@ -1,10 +1,10 @@
 {
     "Id":"ffx2TurnBased",
-    "Name":"FFX-2 Turn Based Mod",
-    "Desc":"Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
-    "Authors": "jmx532",
+    "Name":"FFX2 Turn Based ",
+    "Desc":"A mod to give FFX2 a turn bases battle system.",
+    "Authors": "jmcx532",
     "Version":"1.0.0-alpha",
-    "Link":"https://github.com/peppy-enterprises/fh-mods-template",
+    "Link":"https://github.com/jmcx532/FFX-2-TurnBased",
     "Dependencies":[],
     "LoadAfter":[],
     "Flags":"SEPARATE_SAVES"
