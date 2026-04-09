@@ -7,8 +7,6 @@ A Fahrenheit based mod for FFX-2 that changes the battle system to be turn-based
 
 https://www.youtube.com/watch?v=j4Zda7A3lCo
 
-[<iframe width="560" height="315" src="https://www.youtube.com/embed/j4Zda7A3lCo?si=IsHx7sI9HxMHvpiY](https://www.youtube.com/watch?v=j4Zda7A3lCo)
-
 # Notes
 
 This mod requires additional EFL files to work correctly!
