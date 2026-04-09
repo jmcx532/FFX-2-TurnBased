@@ -1,7 +1,7 @@
 {
     "Id":"ffx2TurnBased",
     "Name":"FFX2 Turn Based ",
-    "Desc":"A mod to give FFX2 a turn bases battle system.",
+    "Desc":"A mod to give FFX2 a turn based battle system.",
     "Authors": "jmcx532",
     "Version":"1.0.0-alpha",
     "Link":"https://github.com/jmcx532/FFX-2-TurnBased",
