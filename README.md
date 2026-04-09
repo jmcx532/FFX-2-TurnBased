@@ -3,6 +3,12 @@ A Fahrenheit based mod for FFX-2 that changes the battle system to be turn-based
 
 ![20260409002624_1](https://github.com/user-attachments/assets/fdc37186-c076-499b-81be-361fe7e690d7)
 
+### Video - vs Chac
+
+https://www.youtube.com/watch?v=j4Zda7A3lCo
+
+[<iframe width="560" height="315" src="https://www.youtube.com/embed/j4Zda7A3lCo?si=IsHx7sI9HxMHvpiY](https://www.youtube.com/watch?v=j4Zda7A3lCo)
+
 # Notes
 
 This mod requires additional EFL files to work correctly!
