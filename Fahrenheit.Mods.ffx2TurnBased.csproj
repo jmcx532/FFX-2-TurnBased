@@ -4,7 +4,4 @@
         <AssemblyTitle>FFX2 Turn Based</AssemblyTitle>
         <Product>FFX2 Turn Based</Product>
     </PropertyGroup>
-    <ItemGroup>
-      <PackageReference Update="Fahrenheit" Version="1.0.0-alpha09" />
-    </ItemGroup>
 </Project>
