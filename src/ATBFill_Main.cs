@@ -599,9 +599,9 @@ public unsafe partial class ATBFillModule : FhModule {
                 // This else block handles situations where NO character can act, due to debugs flags, or all being Asleep or Stopped.
                 
                 // Debug flag handling
-                bool dbg_allies_disabled = FhUtil.get_at<byte>(0x9F78BA) == 1;
-                bool dbg_enemies_disabled = FhUtil.get_at<byte>(0x9F78BB) == 1;
-                if(dbg_allies_disabled && dbg_enemies_disabled) { chrCanAct = true;  }
+                bool debugAlliesDisabled = FhUtil.get_at<byte>(0x9F78BA) == 1;
+                bool dbgEnemiesDisabled = FhUtil.get_at<byte>(0x9F78BB) == 1;
+                if(debugAlliesDisabled && dbgEnemiesDisabled) { chrCanAct = true;  }
 
                 // Status handling
                 for (uint x = 0; x < atb_timer_values.Length; x++) {

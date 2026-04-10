@@ -131,8 +131,8 @@ public unsafe partial class ATBRecoveryModule : FhModule {
 
             uint com_dmg_data = *(uint*)(cmd_base + 0x1c);                  // get damage flags
             bool comHealsStatuses = ((com_dmg_data >> 5) & 1) != 0;
-            bool commandInflictsHaste = (*(byte*)(cmd_base + 0x4b) > 0) && !comHealsStatuses;      // Does command inflict Haste
-            bool commandInflictsSlow = (*(byte*)(cmd_base + 0x4c) > 0) && !comHealsStatuses;       // Does command inflict Slow
+            bool comInflictsHaste = (*(byte*)(cmd_base + 0x4b) > 0) && !comHealsStatuses;      // Does command inflict Haste
+            bool comInflictsSlow = (*(byte*)(cmd_base + 0x4c) > 0) && !comHealsStatuses;       // Does command inflict Slow
 
             uint com_exp_data = *(uint*)(cmd_base + 0x14);                  // get exp_data flags
             
@@ -141,30 +141,30 @@ public unsafe partial class ATBRecoveryModule : FhModule {
             uint STRONG_DELAY = FhUtil.get_at<uint>(0x9f8ea4);
 
 
-            bool com_weak_delay = (com_exp_data & 0x1000) != 0;             // is weak delay flag set?
-            bool com_strong_delay = (com_exp_data & 0x2000) != 0;           // is strong delay flag set?
-            bool cmdDelaysNoSlow = (com_weak_delay || com_strong_delay) && !commandInflictsSlow; // Does the command only delay, no Slow statuse effect chance
+            bool comWeakDelay = (com_exp_data & 0x1000) != 0;             // is weak delay flag set?
+            bool comStrongDelay = (com_exp_data & 0x2000) != 0;           // is strong delay flag set?
+            bool cmdDelaysNoSlow = (comWeakDelay || comStrongDelay) && !comInflictsSlow; // Does the command only delay, no Slow statuse effect chance
 
             bool cmdHasATBHealingOrDmg = (*(byte*)(cmd_base + 0x27)) == 4;  // Does the command target ATB
-            bool com_heals = ((com_dmg_data >> 4) & 1) != 0; // does the command restore, not damage HP, MP, or ATB
+            bool comHeals = ((com_dmg_data >> 4) & 1) != 0; // does the command restore, not damage HP, MP, or ATB
 
             foreach (var unit in BattleUnits) {
                 if (unit.isTargeted) {
                     int original_atb_rem = unit.atb_remaining;
-                    if (commandInflictsHaste && !cmdHasATBHealingOrDmg) { unit.hasHaste = true; }// Update Haste bool
-                    if (commandInflictsSlow && !cmdHasATBHealingOrDmg) { unit.hasSlow = true; }  // Update Slow bool
+                    if (comInflictsHaste && !cmdHasATBHealingOrDmg) { unit.hasHaste = true; }// Update Haste bool
+                    if (comInflictsSlow && !cmdHasATBHealingOrDmg) { unit.hasSlow = true; }  // Update Slow bool
 
-                    if (com_weak_delay) {
+                    if (comWeakDelay) {
                         if (cmdDelaysNoSlow) { unit.atb_remaining += (int)WEAK_DELAY; }
-                        if (commandInflictsSlow && !unit.hasSlow) { unit.atb_remaining += (int)WEAK_DELAY; }
+                        if (comInflictsSlow && !unit.hasSlow) { unit.atb_remaining += (int)WEAK_DELAY; }
                     }
-                    if (com_strong_delay) {
+                    if (comStrongDelay) {
                         if (cmdDelaysNoSlow) { unit.atb_remaining += (int)STRONG_DELAY; }
-                        if (commandInflictsSlow && !unit.hasSlow) { unit.atb_remaining += (int)STRONG_DELAY; }
+                        if (comInflictsSlow && !unit.hasSlow) { unit.atb_remaining += (int)STRONG_DELAY; }
                     }
 
                    
-                    bool cmdTgtsATBNoHasteOrSlow = (cmdHasATBHealingOrDmg && !commandInflictsHaste && !commandInflictsSlow);
+                    bool cmdTgtsATBNoHasteOrSlow = (cmdHasATBHealingOrDmg && !comInflictsHaste && !comInflictsSlow);
                     
 
                     if (cmdHasATBHealingOrDmg) {
@@ -172,16 +172,16 @@ public unsafe partial class ATBRecoveryModule : FhModule {
                         float multiplier = (cmd_power / 16.0f);
                         int amount_to_modify_by = (int)((float)original_atb_rem * multiplier);
 
-                        if (com_heals) {
+                        if (comHeals) {
                             // Apply ATB healing only if Haste can actually be applied
-                            if (commandInflictsHaste && !unit.hasHaste) {
+                            if (comInflictsHaste && !unit.hasHaste) {
                                 unit.atb_remaining -= amount_to_modify_by;
                             }
                             if (cmdTgtsATBNoHasteOrSlow) { unit.atb_remaining -= amount_to_modify_by; }
                         }
                         else {
                             // Apply ATB damage only if Slow can actually be applied
-                            if (commandInflictsSlow && !unit.hasSlow) {
+                            if (comInflictsSlow && !unit.hasSlow) {
                                 unit.atb_remaining += amount_to_modify_by;
                             }
                             if (cmdTgtsATBNoHasteOrSlow) { unit.atb_remaining += amount_to_modify_by; }
