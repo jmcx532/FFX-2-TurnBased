@@ -10,14 +10,14 @@ public delegate int MsGetChr(uint chr_id);
 
 [FhLoad(FhGameId.FFX2)]
 public class TurnBasedModule : FhModule {
-    protected readonly FhLogger _wait_flag_logger;
+    
     private readonly FhMethodHandle<MsSetATBwait>_MsSetATBwait_handle;
     private readonly FhMethodHandle<MsGetChr> _MsGetChr_handle;
 
     public TurnBasedModule() {
         int addr_offset = 0x400000;
 
-        _wait_flag_logger = new FhLogger("WaitFlag_Writer_TurnBased.log");
+        
         _MsSetATBwait_handle = new FhMethodHandle<MsSetATBwait>(this, "FFX-2.exe", 0x634ae0 - addr_offset, h_MsSetATBwait);
         _MsGetChr_handle = new FhMethodHandle<MsGetChr>(this, "FFX-2.exe", 0x611450 - addr_offset, h_MsGetChr);
     }

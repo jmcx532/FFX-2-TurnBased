@@ -15,9 +15,6 @@ public unsafe partial class ATBFillModule : FhModule {
     //offset address
     int addr_offset = 0x400000;
 
-    protected readonly FhLogger _fill_logger;
-
-
     //delegates
     //6343d0 - MsChrATBprocess
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -103,8 +100,6 @@ public unsafe partial class ATBFillModule : FhModule {
     private readonly FhMethodHandle<MsGetComData> _MsGetComData_handle;
 
     public ATBFillModule() {
-
-        _fill_logger = new FhLogger("TurnBased_FillHandler.log");
 
         _MsChrATBprocess_handle = new FhMethodHandle<MsChrATBprocess>(this, "FFX-2.exe", 0x6343d0 - addr_offset, h_MsChrATBprocess);
         _FUN_00634A20_handle = new FhMethodHandle<FUN_00634A20>(this, "FFX-2.exe", 0x634a20 - addr_offset, h_FUN_00634A20);
@@ -601,7 +596,6 @@ public unsafe partial class ATBFillModule : FhModule {
                 }
             }
             else {
-                //_fill_logger.Info("No characters eligible for ATB fill.");
                 // This else block handles situations where NO character can act, due to debugs flags, or all being Asleep or Stopped.
                 
                 // Debug flag handling
@@ -621,10 +615,6 @@ public unsafe partial class ATBFillModule : FhModule {
                     }
                 }
             }
-            //logging  
-            //_fill_logger.Info("Can fill array: " + string.Join("", can_fill));
-            //_fill_logger.Info("ATB remaining: " + string.Join(" / ", atb_timer_values));
-
 
         } while (!chrCanAct);
 

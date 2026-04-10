@@ -47,11 +47,9 @@ public unsafe partial class ATBRecoveryModule : FhModule {
     private readonly FhMethodHandle<MsGetComData> _MsGetComData_handle;
     private readonly FhMethodHandle<MsATBgetThinkingTime> _MsATBgetThinkingTime_handle;
     private readonly FhMethodHandle<TOBtlDrawATBGaude> _TOBtlDrawATBGaude_handle;
-    protected readonly FhLogger recov_logger;
 
     public ATBRecoveryModule() {
         int addr_offset = 0x400000;
-        recov_logger = new FhLogger($"TurnBased_ATBRecovery.log");
 
         _MsATBgetRestTime_handle = new FhMethodHandle<MsATBgetRestTime>(this, "FFX-2.exe", 0x634140 - addr_offset, h_MsATBgetRestTime);
         _MsCommandComplete_handle = new FhMethodHandle<MsCommandComplete>(this, "FFX-2.exe", 0x6401c0 - addr_offset, h_MsCommandComplete);
@@ -160,7 +158,6 @@ public unsafe partial class ATBRecoveryModule : FhModule {
         //auto ability recovery time reduction
         ushort command_used = (*(ushort*)(chr_base_address + 0xf3c));
         int percent_reduction = calc_aa_cmd_recov_reduction(chr_base_address, command_used, (int)cmd_base_address);
-        //recov_logger.Info("Command charge time percent reduction is: " + percent_reduction);
 
         //apply auto ability reduction
         calced_recovery = ((100 - percent_reduction) * calced_recovery) / 100;
@@ -242,7 +239,6 @@ public unsafe partial class ATBRecoveryModule : FhModule {
         //Time-trip handling - disable so you can't spam it over and Stop the enemy forever
         if (command_used == 0x31EA) {
             disable_time_Trip();
-            //recov_logger.Info("Disable Time Trip function" + command_used.ToString("X"));
         }
 
         int chr_base = h_MsGetChr(chr_id);

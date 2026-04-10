@@ -8,7 +8,6 @@ namespace Fahrenheit.Modules.FFX2TurnBased;
 
 [FhLoad(FhGameId.FFX2)]
 public unsafe class PreEmptiveModule : FhModule {
-    protected readonly FhLogger btl_init_logger;
 
     //function delegates
     //618b80 -- checks DAT_DF94a5 - (is 1 on premptive)(Need to check if its 2 on ambush, 0 normal) and processes
@@ -63,9 +62,6 @@ public unsafe class PreEmptiveModule : FhModule {
     public PreEmptiveModule() {
         int addr_offset = 0x400000;
 
-
-        btl_init_logger = new FhLogger($"TurnBased_ATB_init_handler.log");
-
         _MsCalcFirstAttack_handle = new FhMethodHandle<MsCalcFirstAttack>(this, "FFX-2.exe", 0x618b80 - addr_offset, h_MsCalcFirstAttack);
         _MsChrAtbReset_handle = new FhMethodHandle<MsChrAtbReset>(this, "FFX-2.exe", 0x6348a0 - addr_offset, h_MsChrAtbReset);
         _MsChrAtbInit_handle = new FhMethodHandle<MsChrAtbInit>(this, "FFX-2.exe", 0x634730 - addr_offset, h_MsChrAtbInit);
@@ -94,7 +90,6 @@ public unsafe class PreEmptiveModule : FhModule {
     //this function returns the base address for commands -- AND OTHER EXCEL DATA - look through its sub-functions
     //param_1 is the command id (e.g 0x3002)
     public unsafe int h_MsGetComData(uint command_id, int* param_2) {
-        //btl_init_logger.Info("MsGetComData PARAM_1 is:" + param_1.ToString("X"));
         return _MsGetComData_handle.orig_fptr.Invoke(command_id, param_2);
     }
 
@@ -118,9 +113,7 @@ public unsafe class PreEmptiveModule : FhModule {
     //ALWAYS RUNS ON BATTLE START
     public unsafe int h_MsCalcFirstAttack() {
 
-        btl_init_logger.Info("h_init_btl_state function called");
-        //re-enable Psychics Time Trip command - can only use once per battle
-        reenable_time_trip();
+        reenable_time_trip();// Re-enables Psychic's Time Trip command - can only use once per battle
 
         //update YRPs +ec2 state flag (normally increments when target hit) - used for counterattack handling and needs to be set at start of battle to avoid softlock
         //this is used for ally counter-attack handling to set wait mode until they've finished
@@ -208,8 +201,6 @@ public unsafe class PreEmptiveModule : FhModule {
 
     //function to re-enable Psychics Time Trip command
     public void reenable_time_trip() {
-
-        btl_init_logger.Info("Re-enable Time Trip Function");
         
         //get the commands data 
         int tt_exp_data = h_MsGetComData(0x31ea, (int*)(0));

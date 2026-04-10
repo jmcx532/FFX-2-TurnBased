@@ -419,7 +419,6 @@ public unsafe partial class ATBRecoveryModule : FhModule {
     }
     public void h_MsStatusEffectCheck(byte chr_id) {
         _MsStatusEffectCheck_handle.orig_fptr.Invoke(chr_id);
-        //_fill_logger.Info("h_MsStatusEffectCheck called");
     }
     public int h_MsMotionRecoverExe(uint chr_id, int param_2) {
         return _MsMotionRecoverExe_handle.orig_fptr.Invoke(chr_id, param_2);

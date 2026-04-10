@@ -150,7 +150,6 @@ public unsafe partial class ATBFillModule : FhModule {
         //auto ability recovery time reduction
         ushort command_used = (*(ushort*)(chr_base_address + 0xf3c));
         int percent_reduction = 0;
-        //recov_logger.Info("Command charge time percent reduction is: " + percent_reduction);
 
         //apply auto ability reduction
         calced_recovery = ((100 - percent_reduction) * calced_recovery) / 100;

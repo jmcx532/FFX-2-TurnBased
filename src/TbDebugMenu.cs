@@ -11,7 +11,6 @@ public unsafe class TbDebugModule : FhModule {
 
     bool showMenu = false;
 
-    //protected readonly FhLogger _logger;
     private readonly FhMethodHandle<get_chr_addr> _get_chr_addr_handle;
 
     public TbDebugModule() {
