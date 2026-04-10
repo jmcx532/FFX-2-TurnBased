@@ -1,21 +1,32 @@
 # FFX-2-TurnBased
 A Fahrenheit based mod for FFX-2 that changes the battle system to be turn-based in a similar style to FFX.
 
-### Video - vs Chac
+### Showcase Video - vs Chac
 
 https://www.youtube.com/watch?v=j4Zda7A3lCo
 
-<img width="1920" height="1080" alt="Screenshot_20260409_203342" src="https://github.com/user-attachments/assets/696ad59c-2ed6-40fc-88f8-0da47a635b25" />
+# Installation
 
-![20260409002624_1](https://github.com/user-attachments/assets/fdc37186-c076-499b-81be-361fe7e690d7)
+This mod requires some data files to be patched to function correctly.
 
-# Notes
+1. Download the [VBF Browser](https://www.nexusmods.com/finalfantasy12/mods/3) and extract the `ffx_ps2` folder from `YOUR_STEAM_LIBRARY\FINAL FANTASY FFX&FFX-2 HD Remaster\data\FFX2_Data.vbf` to a location of your choosing.
 
-This mod requires additional EFL files to work correctly!
+2. From `ffx_ps2\ffx2\master\jppc\battle\kernel` you will need to copy `rom.bin` into `Required File Patches\PlaceYourFilesHere`.
 
-1. Extract VBF...
-2. These files...
-3. Required changes...
+3. From `ffx_ps2\ffx2\master\new_uspc\battle\kernel` you will need to copy the following files into `Required File Patches\PlaceYourFilesHere`:
+* a_ability.bin
+* command.bin
+* item.bin
+* monmagic.bin
 
-# Links
-https://github.com/fahrenheit-crew/fahrenheit
+4. Now run `PatchFiles.bat` which will apply the patches to your files. This will create a directory in the `Output` folder:
+
+`efl\x2\ffx_ps2...`
+
+Copy this `efl` folder into the `ffx2TurnBased` folder. (Alongside the DLL, mod manifest etc.)
+
+# Credits
+[Fahrenheit](https://github.com/fahrenheit-crew/fahrenheit) - The Fahrenheit crew
+[VBF Browser](https://www.nexusmods.com/finalfantasy12/mods/3) - Vaan, Topher and FFGriever
+[xDelta3](https://github.com/jmacd/xdelta-gpl) - Joshua MacDonald
+
