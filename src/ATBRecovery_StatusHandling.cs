@@ -359,7 +359,8 @@ public unsafe partial class ATBRecoveryModule : FhModule {
                         uint chr_regen_numerator = *(uint*)(chr_base + 0x698);
                         int chr_max_hp =  *(int*)(chr_base + 0x384);
 
-                        regen_amount = -(int)((chr_regen_numerator / 256.0) * chr_max_hp);
+                        //regen_amount = -(int)((chr_regen_numerator / 256.0) * chr_max_hp);
+                        regen_amount = -(int)Math.Max(1, (3 / 256.0) * chr_max_hp);
 
                         //create new DamageBuffer and get pointer for next 2 function calls
                         DamageBuffer rgn_buffer = new();
