@@ -672,37 +672,34 @@ public unsafe partial class ATBFillModule : FhModule {
     }
 
     public override bool init(FhModContext mod_context, FileStream global_state_file) {
+        //_MsChrATBprocess_handle.hook(); // Uncomment and add to return list if required
+
         // ATB fill hooks
-        //_MsChrATBprocess_handle.hook();
-        _msChrATBprocess_handle.hook();
-        _FUN_00634A20_handle.hook();
-        _MsMagicCheckCommandExe_handle.hook();
-        _MsBtlChrNumCheck_handle.hook();
-        _MsActionRequest_handle.hook();
-        _TOBtlSetATBChr_handle.hook();
-        _MsActionAI_handle.hook();
-        _MsAutoConfuseProcess_handle.hook();
-        _MsAutoBerserkProcess_handle.hook();
-        _MsGetRamChrMonster_handle.hook();
-
-        _MsGetChr_handle.hook();
-        _MsGetComData_handle.hook();
-
+        return _msChrATBprocess_handle.hook()
+        && _FUN_00634A20_handle.hook()
+        && _MsMagicCheckCommandExe_handle.hook()
+        && _MsBtlChrNumCheck_handle.hook()
+        && _MsActionRequest_handle.hook()
+        && _TOBtlSetATBChr_handle.hook()
+        && _MsActionAI_handle.hook()
+        && _MsAutoConfuseProcess_handle.hook()
+        && _MsAutoBerserkProcess_handle.hook()
+        && _MsGetRamChrMonster_handle.hook()
+        // Common hooks
+        && _MsGetChr_handle.hook()
+        && _MsGetComData_handle.hook()
         //Status Handling hooks
-        _MsStatCheckStop_handle.hook();
-        _MsATBActiveCheck_handle.hook();
-        _FUN_006218E0_handle.hook();
-        _ClampBetween_handle.hook();
-        _FUN_00636690_handle.hook();
-        _MsStructClear_handle.hook();
-        _MsDamageBufferExe_handle.hook();
-        _MsSetStatus_handle.hook();
-        _MsSetChrWeak_handle.hook();
-        _MsStatusEffectCheck_handle.hook();
-        _MsMotionRecoverExe_handle.hook();
-
-        return true;
-        
+        && _MsStatCheckStop_handle.hook()
+        && _MsATBActiveCheck_handle.hook()
+        && _FUN_006218E0_handle.hook()
+        && _ClampBetween_handle.hook()
+        && _FUN_00636690_handle.hook()
+        && _MsStructClear_handle.hook()
+        && _MsDamageBufferExe_handle.hook()
+        && _MsSetStatus_handle.hook()
+        && _MsSetChrWeak_handle.hook()
+        && _MsStatusEffectCheck_handle.hook()
+        && _MsMotionRecoverExe_handle.hook();
     }
 
     public override void load_local_state(FileStream? local_state_file, FhLocalStateInfo local_state_info) { }

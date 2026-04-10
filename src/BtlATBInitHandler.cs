@@ -227,17 +227,16 @@ public unsafe class PreEmptiveModule : FhModule {
 
 
     public override bool init(FhModContext mod_context, FileStream global_state_file) {
-        _MsGetChr_handle.hook();
-        _MsChrAtbReset_handle.hook();
-        _MsCalcFirstAttack_handle.hook();
-        _MsChrAtbInit_handle.hook();
+        return _MsGetChr_handle.hook()
+        && _MsChrAtbReset_handle.hook()
+        && _MsCalcFirstAttack_handle.hook()
+        && _MsChrAtbInit_handle.hook()
+        && _MsGetComData_handle.hook()
+        && _MsGetRndChr_handle.hook()
+        && _brnd_handle.hook()
+        && _MsGetRamChrMonster_handle.hook()
+        && _MsGetChrStatDeathStone_handle.hook();
 
-        _MsGetComData_handle.hook();
-        _MsGetRndChr_handle.hook();
-        _brnd_handle.hook();
-        _MsGetRamChrMonster_handle.hook();
-        _MsGetChrStatDeathStone_handle.hook();
-        return true;
     }
 
     public override void load_local_state(FileStream? local_state_file, FhLocalStateInfo local_state_info) { }

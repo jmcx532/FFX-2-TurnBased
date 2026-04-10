@@ -285,28 +285,26 @@ public unsafe partial class ATBRecoveryModule : FhModule {
     
     // FH init ------------------------------------------------------------------------------------
     public override bool init(FhModContext mod_context, FileStream global_state_file) {
-        _MsATBgetRestTime_handle.hook();
-        _MsCommandComplete_handle.hook();
-        _MsGetChr_handle.hook();
-        _MsGetComData_handle.hook();
-        _ClampBetween_handle.hook();
-
-        _MsATBgetThinkingTime_handle.hook();
-        _TOBtlDrawATBGaude_handle.hook();
-
+        return _MsATBgetRestTime_handle.hook()
+        && _MsCommandComplete_handle.hook()
+        && _MsGetChr_handle.hook()
+        && _MsGetComData_handle.hook()
+        && _ClampBetween_handle.hook()
+        // additonal hooks
+        && _MsATBgetThinkingTime_handle.hook()
+        && _TOBtlDrawATBGaude_handle.hook()
         // status handling hooks
-        _MsStatusProcess_handle.hook();
-        _MsStatCheckStop_handle.hook();
-        _MsATBActiveCheck_handle.hook();
-        _FUN_006218E0_handle.hook();
-        _FUN_00636690_handle.hook();
-        _MsStructClear_handle.hook();
-        _MsDamageBufferExe_handle.hook();
-        _MsSetStatus_handle.hook();
-        _MsSetChrWeak_handle.hook();
-        _MsStatusEffectCheck_handle.hook();
-        _MsMotionRecoverExe_handle.hook();
-        return true;
+        && _MsStatusProcess_handle.hook()
+        && _MsStatCheckStop_handle.hook()
+        && _MsATBActiveCheck_handle.hook()
+        && _FUN_006218E0_handle.hook()
+        && _FUN_00636690_handle.hook()
+        && _MsStructClear_handle.hook()
+        && _MsDamageBufferExe_handle.hook()
+        && _MsSetStatus_handle.hook()
+        && _MsSetChrWeak_handle.hook()
+        && _MsStatusEffectCheck_handle.hook()
+        && _MsMotionRecoverExe_handle.hook();
     }
 
     public override void load_local_state(FileStream? local_state_file, FhLocalStateInfo local_state_info) { }

@@ -103,9 +103,7 @@ public class TurnBasedModule : FhModule {
     }
 
     public override bool init(FhModContext mod_context, FileStream global_state_file) {
-        _MsSetATBwait_handle.hook();
-        _MsGetChr_handle.hook();
-        return true;
+        return _MsSetATBwait_handle.hook() && _MsGetChr_handle.hook();
     }
 
     public override void load_local_state(FileStream? local_state_file, FhLocalStateInfo local_state_info) { }
