@@ -23,7 +23,15 @@ This mod requires some data files to be patched to function correctly.
 * item.bin
 * monmagic.bin
 
-5. Now run `PatchFiles.bat` which will apply the patches to your files. This will create a directory in the `Output` folder called `efl` which will contain the patched files: `efl\x2\ffx_ps2...`
+5. From `ffx_ps2\ffx2\master\jppc\battle\mon\` you will need to copy the following files into `Required File Patches\PlaceYourFilesHere\MonsterFiles`:
+* m152.bin
+* m290.bin
+* m291.bin
+* m292.bin
+  
+*Note: These files will be inside a subfolder: `\mon\_m152` as an example.*
+
+6. Now run `PatchFiles.bat` which will apply the patches to your files. This will create a directory in the `Output` folder called `efl` which will contain the patched files: `efl\x2\ffx_ps2...`
 
 Copy the `efl` folder into the `ffx2TurnBased` folder. (Alongside the DLL, mod manifest etc.)
 
