@@ -1,6 +1,9 @@
-# FFX-2: Turn Based
+# FFX-2: Turn Based - Base
 A [Fahrenheit](https://github.com/fahrenheit-crew/fahrenheit) based mod for FFX-2 that changes the battle system to be turn-based in a similar style to FFX.
 
+
+
+*This branch/repo contains the base version of the mod, which is intended to be as close to vanilla as possible.*
 *More details about what this mod changes and how it works are documented in this repo's [wiki](https://github.com/jmcx532/FFX-2-TurnBased/wiki).*
 
 ### Showcase Video - vs Chac
