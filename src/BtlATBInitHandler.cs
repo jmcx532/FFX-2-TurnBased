@@ -121,10 +121,6 @@ public unsafe class PreEmptiveModule : FhModule {
         int r_addr = h_MsGetChr(1);
         int p_addr = h_MsGetChr(2);
 
-        *(byte*)(y_addr + 0xec2) = 1;
-        *(byte*)(r_addr + 0xec2) = 1;
-        *(byte*)(p_addr + 0xec2) = 1;
-
         //write YRPs posion damage value to be 32 - damage is 32/256 of their HP (12.5%)
         //delayed slightly - FUN_00628820 writes this first, but hooking that function breaks the mod - YRP have no ATBS
         //and battle is stuck in Active Mode, but nothing happens.
