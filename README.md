@@ -3,16 +3,12 @@ A [Fahrenheit](https://github.com/fahrenheit-crew/fahrenheit) based mod for FFX-
 
 
 
-*This branch/repo contains the base version of the mod, which is intended to be as close to vanilla as possible.*
+*This branch/repo contains a version of the mod that reworks encounters and enemies*
 *More details about what this mod changes and how it works are documented in this repo's [wiki](https://github.com/jmcx532/FFX-2-TurnBased/wiki).*
-
-### Showcase Video - vs Chac
-
-https://www.youtube.com/watch?v=j4Zda7A3lCo
 
 # Installation
 
-This mod requires some data files to be patched to function correctly.
+Note: This mod requires some data files to be patched to function correctly.
 
 *1. Download a release, or build from source, and copy the `ffx2TurnBased` folder into your Fahrenheit `mods` folder.*
 
@@ -28,6 +24,11 @@ This mod requires some data files to be patched to function correctly.
 
 5. From `ffx_ps2\ffx2\master\jppc\battle\mon\` you will need to copy the following files into `Required File Patches\PlaceYourFilesHere\MonsterFiles`:
 * m152.bin
+* m282.bin
+* m283.bin
+* m284.bin
+* m285.bin
+* m286.bin
 * m290.bin
 * m291.bin
 * m292.bin
