@@ -4,6 +4,7 @@ A [Fahrenheit](https://github.com/fahrenheit-crew/fahrenheit) based mod for FFX-
 
 
 *This branch/repo contains the base version of the mod, which is intended to be as close to vanilla as possible.*
+*For a version with reworked encounters, check out the `monster-changes` branch.*
 *More details about what this mod changes and how it works are documented in this repo's [wiki](https://github.com/jmcx532/FFX-2-TurnBased/wiki).*
 
 ### Showcase Video - vs Chac
