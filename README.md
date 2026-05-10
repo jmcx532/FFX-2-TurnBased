@@ -10,32 +10,13 @@ Note: This mod requires some data files to be patched to function correctly.
 
 *1. Download a release, or build from source, and copy the `ffx2TurnBased` folder into your Fahrenheit `mods` folder.*
 
-2. Download the [VBF Browser](https://www.nexusmods.com/finalfantasy12/mods/3) and extract the `ffx_ps2` folder from `YOUR_STEAM_LIBRARY\FINAL FANTASY FFX&FFX-2 HD Remaster\data\FFX2_Data.vbf` to a location of your choosing. 
+2. Download the [VBF Browser](https://www.nexusmods.com/finalfantasy12/mods/3) and extract the `ffx_ps2` folder from `YOUR_STEAM_LIBRARY\FINAL FANTASY FFX&FFX-2 HD Remaster\data\FFX2_Data.vbf` and copy it into `Required File Patches\PlaceYourFilesHere` 
 
-3. From `ffx_ps2\ffx2\master\jppc\battle\kernel` you will need to copy `rom.bin` into `Required File Patches\PlaceYourFilesHere`.
-
-4. From `ffx_ps2\ffx2\master\new_uspc\battle\kernel` you will need to copy the following files into `Required File Patches\PlaceYourFilesHere`:
-* a_ability.bin
-* command.bin
-* item.bin
-* monmagic.bin
-
-5. From `ffx_ps2\ffx2\master\jppc\battle\mon\` you will need to copy the following files into `Required File Patches\PlaceYourFilesHere\MonsterFiles`:
-* m152.bin
-* m282.bin
-* m283.bin
-* m284.bin
-* m285.bin
-* m286.bin
-* m290.bin
-* m291.bin
-* m292.bin
-  
-*Note: These files will be inside a subfolder: `\mon\_m152` as an example.*
-
-6. Now run `PatchFiles.bat` which will apply the patches to your files. This will create a directory in the `Output` folder called `efl` which will contain the patched files: `efl\x2\ffx_ps2...`
+3. Now run `ApplyPacthes.bat` which will apply the patches to your files. This will create a directory in the `Output` folder called `efl` which will contain the patched files: `efl\x2\ffx_ps2...`
 
 Copy the `efl` folder into the `ffx2TurnBased` folder. (Alongside the DLL, mod manifest etc.)
+
+You can then delete the `ffx_ps2` folder you copied into `PlaceYourFilesHere` to save disk space.
 
 # Credits
 [Fahrenheit](https://github.com/fahrenheit-crew/fahrenheit) - The Fahrenheit crew
