@@ -10,8 +10,9 @@ namespace Fahrenheit.Modules.FFX2TurnBased;
 public unsafe class PreEmptiveModule : FhModule {
 
     //function delegates
-    //618b80 -- checks DAT_DF94a5 - (is 1 on premptive)(Need to check if its 2 on ambush, 0 normal) and processes
+    //618b80 -- checks DAT_DF94a5 - (is 1 on premptive)(2 on ambush, 0 normal) and processes
     //ALWAYS RUNS ON BATTLE START -- MsCalcFirstAttack
+    //Returns the battle state number
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate int MsCalcFirstAttack();
 
@@ -110,7 +111,7 @@ public unsafe class PreEmptiveModule : FhModule {
     }
 
     //processes the initial battle state normal, preemptive
-    //ALWAYS RUNS ON BATTLE START
+    //ALWAYS RUNS ON BATTLE START, rturns the battle state number (0/1/2, Normal, Pre, Ambush)
     public unsafe int h_MsCalcFirstAttack() {
 
         reenable_time_trip();// Re-enables Psychic's Time Trip command - can only use once per battle
@@ -129,6 +130,7 @@ public unsafe class PreEmptiveModule : FhModule {
         *(int*)(p_addr + 0x694) = 32;
 
         return _MsCalcFirstAttack_handle.orig_fptr.Invoke();
+
     }
 
     //overwrites characters ATB time left
@@ -183,6 +185,7 @@ public unsafe class PreEmptiveModule : FhModule {
 
         //original result is this if chr_base_address is non-zero in original function
         if (original_result == 0xffffffff) {
+
             //if First Strike flag bit is set
             if ((*(byte*)(chr_base_address + 0x650) & 1) != 0) {
                 //overwrite ATB Time left to be their character ID -> 0, 1 or 2 - If they haven't been KOed by the previous attack
@@ -190,6 +193,7 @@ public unsafe class PreEmptiveModule : FhModule {
                     *(int*)(chr_base_address + 0x9d8) = *(byte*)(chr_base_address + 0xC);
                 }
             }
+
         }
         
         return original_result;
