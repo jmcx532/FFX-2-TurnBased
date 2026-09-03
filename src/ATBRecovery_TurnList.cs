@@ -1,5 +1,3 @@
-﻿
-using TerraFX.Interop.Windows;
 
 namespace Fahrenheit.Modules.FFX2TurnBased;
 
@@ -14,7 +12,8 @@ public unsafe partial class ATBRecoveryModule : FhModule {
     const uint TURNS_TO_SHOW = 16;
     
     int ReadATBValue(uint chr_id) {
-        int chr_base_addr = h_MsGetChr(chr_id);
+        Chr* chr = h_MsGetChr(chr_id);
+        int chr_base_addr = (int)chr;
         int atb_remaining = *(int*)(chr_base_addr + ATB_REMAIN_OFFSET);
 
         return atb_remaining;
@@ -62,7 +61,10 @@ public unsafe partial class ATBRecoveryModule : FhModule {
         for(int i = 0; i < length_array.Length; i++) {
             SimBattleUnit chr = new SimBattleUnit();
             chr.chr_id = i;
-            chr.base_addr = h_MsGetChr((uint)i);
+
+            Chr* chr_struct = h_MsGetChr((uint)i);
+            chr.base_addr = (int)chr_struct;
+
             chr.mon_id = *(ushort*)(chr.base_addr + 0xe);
             chr.chr_name = ReadChrName((uint)chr.chr_id);
             chr.atb_remaining = ReadATBValue((uint)chr.chr_id);
@@ -242,7 +244,7 @@ public unsafe partial class ATBRecoveryModule : FhModule {
         }
         uint agility_divisor = (uint)Math.Round(divisor);
 
-        recovery_time = h_clamp_between((int)((cmd_recovery_time / agility_divisor)), 0, 99999);
+        recovery_time = h_MsCheckRange((int)((cmd_recovery_time / agility_divisor)), 0, 99999);
 
         if (BattleUnit.hasHaste){ recovery_time = recovery_time / 2; }
         if (BattleUnit.hasSlow) { recovery_time = recovery_time * 2; }
@@ -347,7 +349,8 @@ public unsafe partial class ATBRecoveryModule : FhModule {
 
     //function to read character's name string, stored in BattleUnit - keep for debugging
     public unsafe string ReadChrName(uint chr_id) {
-        int chr_base_addr = h_MsGetChr(chr_id);
+        Chr* chr = h_MsGetChr(chr_id);
+        int chr_base_addr = (int)chr;
         //pointer to start of Chr name string
         byte* p = (byte*)(chr_base_addr + 0x358);
         Span<byte> buf = stackalloc byte[40];

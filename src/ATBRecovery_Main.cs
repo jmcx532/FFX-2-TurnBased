@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: MIT
 /* A module for FFX-2 that changes the ATB Recovery time after a command has been used
  * Haste halves recovery time while Slow doubles is (similar to FFX)
  * It also reimplements the cooldown reduction from auto-abilities like Black Magic Lv.2 or Turbo Bushido
@@ -13,105 +13,88 @@ namespace Fahrenheit.Modules.FFX2TurnBased;
 [FhLoad(FhGameId.FFX2)]
 public unsafe partial class ATBRecoveryModule : FhModule {
 
-    const ushort SPHERECHANGE_ATB_COST = 40;
-
+    const ushort SPHERECHANGE_ATB_COST = 25;
+    /*
     //function delegates
     //634140 - MsATBgetRestTime
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    public delegate int MsATBgetRestTime(uint chr_id, uint command_id);
+    public delegate uint MsATBgetRestTime(byte chr_id, uint command_id);
+    private static FhMethodHandle<MsATBgetRestTime> _MsATBgetRestTime =>
+        new ( new FhMethodLocation("FFX-2.exe", 0x234140) );
+
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     //6401c0 - MsCommandComplete
-    public delegate uint MsCommandComplete(uint chr_id, int param_2, int param_3);
+    public delegate uint MsCommandComplete(byte chr_id, int param_2, int param_3);
+    private static FhMethodHandle<MsCommandComplete> _MsCommandComplete =>
+        new ( new FhMethodLocation("FFX-2.exe", 0x2401C0) );
 
     //611450 - MsGetChr
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate int MsGetChr(uint chr_id);
-    //625160 - MsGetComData
-    /* this function returns a base address for a command as far as the scope of ATB recovery time is concerned.
-     * In reality, it checks a whole range of things, commands (item, command, monmagic), auto-abilities, Garment Grids*/
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    public unsafe delegate int MsGetComData(uint command_id, byte* param_2);
+    private static FhMethodHandle<MsGetChr> _MsGetChr =>
+        new ( new FhMethodLocation("FFX-2.exe", 0x211450) );
 
+    
 
     //6341a0
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate int MsATBgetThinkingTime(uint chr_id);
+    private static FhMethodHandle<MsATBgetThinkingTime> _MsATBgetThinkingTime =>
+        new ( new FhMethodLocation("FFX-2.exe", 0x2341A0) );
 
     //756590 - TOBtlDrawATBGaude - NOT a typo
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate void TOBtlDrawATBGaude(int param_1, int param_2, int param_3);
+    private static FhMethodHandle<TOBtlDrawATBGaude> _TOBtlDrawATBGaude =>
+        new ( new FhMethodLocation("FFX-2.exe", 0x356590) );
 
-    private readonly FhMethodHandle<MsATBgetRestTime>_MsATBgetRestTime_handle;
-    private readonly FhMethodHandle<MsCommandComplete> _MsCommandComplete_handle;
-    private readonly FhMethodHandle<MsGetChr> _MsGetChr_handle;
-    private readonly FhMethodHandle<MsGetComData> _MsGetComData_handle;
-    private readonly FhMethodHandle<MsATBgetThinkingTime> _MsATBgetThinkingTime_handle;
-    private readonly FhMethodHandle<TOBtlDrawATBGaude> _TOBtlDrawATBGaude_handle;
+    */
 
-    public ATBRecoveryModule() {
-        int addr_offset = 0x400000;
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate int MsGetComData(uint arg1, byte* arg2);
+    private static FhMethodHandle<MsGetComData> _MsGetComData =>
+        new(new FhMethodLocation("FFX-2.exe", 0x225160));
 
-        _MsATBgetRestTime_handle = new FhMethodHandle<MsATBgetRestTime>(this, "FFX-2.exe", 0x634140 - addr_offset, h_MsATBgetRestTime);
-        _MsCommandComplete_handle = new FhMethodHandle<MsCommandComplete>(this, "FFX-2.exe", 0x6401c0 - addr_offset, h_MsCommandComplete);
-        _MsGetComData_handle = new FhMethodHandle<MsGetComData>(this, "FFX-2.exe", 0x625160 - addr_offset, h_MsGetComData);
-        _ClampBetween_handle = new FhMethodHandle<ClampBetween>(this, "FFX-2.exe", 0x624cd0 - addr_offset, h_clamp_between);
-
-        _MsGetChr_handle = new FhMethodHandle<MsGetChr>(this, "FFX-2.exe", 0x611450 - addr_offset, h_MsGetChr);
-
-        _MsATBgetThinkingTime_handle = new FhMethodHandle<MsATBgetThinkingTime>(this, "FFX-2.exe", 0x6341a0 - addr_offset, h_MsATBgetThinkingTime);
-        _TOBtlDrawATBGaude_handle = new FhMethodHandle<TOBtlDrawATBGaude>(this, "FFX-2.exe", 0x756590 - addr_offset, h_TOBtlDrawATBGaude);
-
-        //status handling - see ATBRecovery_StatusHandling.cs for delegates and FhMethodHandle setup
-        _MsStatusProcess_handle = new FhMethodHandle<MsStatusProcess>(this, "FFX-2.exe", 0x636eb0 - addr_offset, h_MsStatusProcess);
-        _MsStatCheckStop_handle = new FhMethodHandle<MsStatCheckStop>(this, "FFX-2.exe", 0x6430f0 - addr_offset, h_MsStatCheckStop);
-        _MsATBActiveCheck_handle = new FhMethodHandle<MsATBActiveCheck>(this, "FFX-2.exe", 0x633f90 - addr_offset, h_MsATBActiveCheck);
-        _FUN_006218E0_handle = new FhMethodHandle<F6218E0>(this, "FFX-2.exe", 0x6218E0 - addr_offset, h_FUN_006218E0);//MsCheckStatCount?
-        _ClampBetween_handle = new FhMethodHandle<ClampBetween>(this, "FFX-2.exe", 0x624cd0 - addr_offset, h_ClampBetween);//MsCheckRange
-        _FUN_00636690_handle = new FhMethodHandle<F636690>(this, "FFX-2.exe", 0x636690 - addr_offset, h_FUN_00636690);
-        _MsStructClear_handle = new FhMethodHandle<MsStructClear>(this, "FFX-2.exe", 0x62a0f0 - addr_offset, h_MsStructClear);
-        _MsDamageBufferExe_handle = new FhMethodHandle<MsDamageBufferExe>(this, "FFX-2.exe", 0x6422d0 - addr_offset, h_MsDamageBufferExe);
-        _MsSetStatus_handle = new FhMethodHandle<MsSetStatus>(this, "FFX-2.exe", 0x636ca0 - addr_offset, h_MsSetStatus);
-        _MsSetChrWeak_handle = new FhMethodHandle<MsSetChrWeak>(this, "FFX-2.exe", 0x61b080 - addr_offset, h_MsSetChrWeak);
-        _MsStatusEffectCheck_handle = new FhMethodHandle<MsStatusEffectCheck>(this, "FFX-2.exe", 0x623290 - addr_offset, h_MsStatusEffectCheck);
-        _MsMotionRecoverExe_handle = new FhMethodHandle<MsMotionRecoverExe>(this, "FFX-2.exe", 0x6330e0 - addr_offset, h_MsMotionRecoverExe);
-
-    }
+    public ATBRecoveryModule() { }
 
     //SUB-FUNCTIONS
-    public int h_MsGetChr(uint chr_id) {
-        return _MsGetChr_handle.orig_fptr.Invoke(chr_id);
+    public Chr* h_MsGetChr(uint chr_id) {
+        return FFX2.FhCall.MsGetChr.chain_from(h_MsGetChr).fnptr!(chr_id);
     }
 
     //this function returns the base address for various Excel data types
     //param_1 is the command id (e.g 0x3002)
     public unsafe int h_MsGetComData(uint command_id, byte* param_2) {
-        int result = _MsGetComData_handle.orig_fptr.Invoke(command_id, param_2);
+        int result = _MsGetComData.chain_from(h_MsGetComData).fnptr!(command_id, param_2);
         return result;
     }
-    public int h_clamp_between(int param_1, int param_2, int param_3) {
-        return _ClampBetween_handle.orig_fptr.Invoke(param_1, param_2, param_3);
+    public int h_MsCheckRange(int param_1, int param_2, int param_3) {
+        return FhCall.MsCheckRange.chain_from(h_MsCheckRange).fnptr!(param_1, param_2, param_3);
     }
     //remove thinking time, used to cause a bug with poison/regen, probably OK now, but don't need this mechanic
     public int h_MsATBgetThinkingTime(uint chr_id) {
-        int original_result = _MsATBgetThinkingTime_handle.orig_fptr.Invoke(chr_id);
+        int original_result = FFX2.FhCall.MsATBgetThinkingTime.chain_from(h_MsATBgetThinkingTime).fnptr!(chr_id);
         //return 0 instead
         return 0;
     }
 
+    /*
     // Stub out to prevent ATB Gauges from being drawn
     public void h_TOBtlDrawATBGaude(int param_1, int param_2, int param_3) {
         return;
-         //_TOBtlDrawATBGaude_handle.orig_fptr.Invoke(param_1, param_2, param_3); // stub out to stop ATB gauges being drawn, or is a mkp function the actual drawer?
-    }
+         //FFX2.FhCall.TOBtlDrawATBGaude.chain_from(h_TOBtlDrawATBGaude).fnptr!(param_1, param_2, param_3); // stub out to stop ATB gauges being drawn, or is a mkp function the actual drawer?
+    }*/
 
     //MAIN FUNCTIONS---------------------------------------------------------------------------------------------------
     //called constantly - not a one and done function - use MsCommandComplete for those types of effects
-    public int h_MsATBgetRestTime(uint chr_id, uint command_id) {
+    public uint h_MsATBgetRestTime(byte chr_id, uint command_id) {
         int chr_base_address;
         int cmd_base_address;
 
         /* Gets the character's base address */
-        chr_base_address = h_MsGetChr(chr_id);
+        Chr* chr = h_MsGetChr(chr_id);
+        chr_base_address = (int)chr;
+
         // FUN_00625160 - Get the commands base address, this function can also return other Excel data types
         cmd_base_address = h_MsGetComData(command_id, (byte*)(0));
 
@@ -141,17 +124,19 @@ public unsafe partial class ATBRecoveryModule : FhModule {
         //delay from attacks to be added
         uint accrued_delay = (uint)*(int*)(chr_base_address + 0x9e0);
         //calculate ATB timer length and clamp between 0 and 99999
-        int calced_recovery = h_clamp_between((int)((cmd_recovery_time / agility_divisor) + accrued_delay), 0, 99999);
+        uint calced_recovery = (uint)h_MsCheckRange((int)((cmd_recovery_time / agility_divisor) + accrued_delay), 0, 99999);
 
 
         //Haste / Slow Modifier
         //if character is hasted - half recovery time
-        if (*(byte*)(chr_base_address + 0x43c) != '\0') {
-            calced_recovery = calced_recovery / 2;
+        if (*(byte*)(chr_base_address + 0x43c) != '\0')
+        {
+            calced_recovery = (calced_recovery * 75) / 100;
         }
         //if character is slowed - double recovery time
-        if (*(byte*)(chr_base_address + 0x43d) != '\0') {
-            calced_recovery = calced_recovery * 2;
+        if (*(byte*)(chr_base_address + 0x43d) != '\0')
+        {
+            calced_recovery = (calced_recovery * 125) / 100;
         }
 
 
@@ -160,7 +145,7 @@ public unsafe partial class ATBRecoveryModule : FhModule {
         int percent_reduction = calc_aa_cmd_recov_reduction(chr_base_address, command_used, (int)cmd_base_address);
 
         //apply auto ability reduction
-        calced_recovery = ((100 - percent_reduction) * calced_recovery) / 100;
+        calced_recovery = (uint)((100 - percent_reduction) * calced_recovery) / 100;
             
         // Accrued delay is reset 
         *(int*)(chr_base_address + 0x9e0) = 0;
@@ -223,7 +208,7 @@ public unsafe partial class ATBRecoveryModule : FhModule {
         if (recov_time_reduction == 0) {
             return 0;
         }
-        recov_time_reduction = h_clamp_between(recov_time_reduction, -100, 100);
+        recov_time_reduction = h_MsCheckRange(recov_time_reduction, -100, 100);
         return recov_time_reduction;
     }
 
@@ -232,7 +217,7 @@ public unsafe partial class ATBRecoveryModule : FhModule {
     public uint h_MsCommandComplete(uint chr_id, int param_2, int param_3) {
 
         //run the orignal function
-        uint original_result = _MsCommandComplete_handle.orig_fptr.Invoke(chr_id, param_2, param_3);
+        uint original_result = FFX2.FhCall.MsCommandComplete.chain_from(h_MsCommandComplete).fnptr!(chr_id, param_2, param_3);
 
         //Post-hook
         uint command_used = (uint)*(ushort*)(param_3 + 0xa4);
@@ -241,7 +226,8 @@ public unsafe partial class ATBRecoveryModule : FhModule {
             disable_time_Trip();
         }
 
-        int chr_base = h_MsGetChr(chr_id);
+        Chr* chr = h_MsGetChr(chr_id);
+        int chr_base = (int)chr;
         //0xF3C to 0xF3D is the command that character last used, or a DS id on spherechange
         //if the character changed dressphere
         if (*(byte*)(chr_base + 0xF3D) == 0x50) {
@@ -281,26 +267,26 @@ public unsafe partial class ATBRecoveryModule : FhModule {
     
     // FH init ------------------------------------------------------------------------------------
     public override bool init(FhModContext mod_context, FileStream global_state_file) {
-        return _MsATBgetRestTime_handle.hook()
-        && _MsCommandComplete_handle.hook()
-        && _MsGetChr_handle.hook()
-        && _MsGetComData_handle.hook()
-        && _ClampBetween_handle.hook()
+        return FFX2.FhCall.MsATBgetRestTime.hook(this, h_MsATBgetRestTime)
+        && FFX2.FhCall.MsCommandComplete.hook(this, h_MsCommandComplete)
+        && FFX2.FhCall.MsGetChr.hook(this, h_MsGetChr)
+        && _MsGetComData.hook(this, h_MsGetComData)
+        && FhCall.MsCheckRange.hook(this, h_MsCheckRange)
         // additonal hooks
-        && _MsATBgetThinkingTime_handle.hook()
-        && _TOBtlDrawATBGaude_handle.hook()
+        && FFX2.FhCall.MsATBgetThinkingTime.hook(this, h_MsATBgetThinkingTime)
+        //&& FFX2.FhCall.TOBtlDrawATBGaude.hook(this, h_TOBtlDrawATBGaude)
         // status handling hooks
-        && _MsStatusProcess_handle.hook()
-        && _MsStatCheckStop_handle.hook()
-        && _MsATBActiveCheck_handle.hook()
-        && _FUN_006218E0_handle.hook()
-        && _FUN_00636690_handle.hook()
-        && _MsStructClear_handle.hook()
-        && _MsDamageBufferExe_handle.hook()
-        && _MsSetStatus_handle.hook()
-        && _MsSetChrWeak_handle.hook()
-        && _MsStatusEffectCheck_handle.hook()
-        && _MsMotionRecoverExe_handle.hook();
+        && FFX2.FhCall.MsStatusProcess.hook(this, h_MsStatusProcess)
+        && FFX2.FhCall.MsStatCheckStop.hook(this, h_MsStatCheckStop)
+        && FFX2.FhCall.MsATBActiveCheck.hook(this, h_MsATBActiveCheck)
+        && FFX2.FhCall.MsCheckStatCount.hook(this, h_MsCheckStatCount)
+        && FFX2.FhCall.FUN_00636690.hook(this, h_FUN_00636690)
+        && FFX2.FhCall.MsStructClear.hook(this, h_MsStructClear)
+        && FFX2.FhCall.MsDamageBufferExe.hook(this, h_MsDamageBufferExe)
+        && FFX2.FhCall.MsSetStatus.hook(this, h_MsSetStatus)
+        && FFX2.FhCall.MsSetChrWeak.hook(this, h_MsSetChrWeak)
+        && FFX2.FhCall.MsStatusEffectCheck.hook(this, h_MsStatusEffectCheck)
+        && FFX2.FhCall.MsMotionRecoverExe.hook(this, h_MsMotionRecoverExe);
     }
 
     public override void load_local_state(FileStream? local_state_file, FhLocalStateInfo local_state_info) { }

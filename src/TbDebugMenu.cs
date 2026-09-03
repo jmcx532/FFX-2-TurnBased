@@ -1,22 +1,13 @@
-﻿// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: MIT
 
 namespace Fahrenheit.Modules.FFX2TurnBased.DebugMenu;
-
-[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-public delegate nint get_chr_addr(uint chr_id);
-
 
 [FhLoad(FhGameId.FFX2)]
 public unsafe class TbDebugModule : FhModule {
 
     bool showMenu = false;
 
-    private readonly FhMethodHandle<get_chr_addr> _get_chr_addr_handle;
-
-    public TbDebugModule() {
-;       int addr_offset = 0x400000;
-        _get_chr_addr_handle = new FhMethodHandle<get_chr_addr>(this, "FFX-2.exe", 0x611450 - addr_offset, h_get_chr_addr);
-    }
+    public TbDebugModule() { }
 
 
     public override void render_imgui() {
@@ -33,10 +24,12 @@ public unsafe class TbDebugModule : FhModule {
             for (int i = 0; i < 3; i++) {
 
                 if (ImGui.Button("Unstick Chr" + i)) {
-                    nint chr_base_addr = h_get_chr_addr((uint)i);
+                    Chr* chr = h_MsGetChr((uint)i);
+                    nint chr_base_addr = (nint)chr;
                     *(byte*)(chr_base_addr + 0xEC2) = 1;
                 }
-                nint cb2 = h_get_chr_addr((uint)i);
+                Chr* chr2 = h_MsGetChr((uint)i);
+                nint cb2 = (nint)chr2;
                 byte flag_value = *(byte*)(cb2 + 0xEC2);
                 ushort last_command = *(ushort*)(cb2 + 0xf3c);
                 ImGui.SameLine();
@@ -51,7 +44,8 @@ public unsafe class TbDebugModule : FhModule {
                 ImGuiWindowFlags.NoFocusOnAppearing
                 );
 
-            nint Ychr_base = h_get_chr_addr(0);
+            Chr* y_chr = h_MsGetChr(0);
+            nint Ychr_base = (nint)y_chr;
 
             int Yspeed1 = *(int*)(Ychr_base + 0x9e4);
             ImGui.Text("Speed1 value: " + Yspeed1);
@@ -107,7 +101,8 @@ public unsafe class TbDebugModule : FhModule {
             ImGuiWindowFlags.NoFocusOnAppearing
             );
 
-            nint Rchr_base = h_get_chr_addr(0);
+            Chr* r_chr = h_MsGetChr(1);
+            nint Rchr_base = (nint)r_chr;
 
             int Rspeed1 = *(int*)(Rchr_base + 0x9e4);
             ImGui.Text("Speed1 value: " + Rspeed1);
@@ -162,9 +157,10 @@ public unsafe class TbDebugModule : FhModule {
                 "Paine Status Info",
                 ImGuiWindowFlags.NoFocusOnAppearing
                 );
-            nint Pchr_base = h_get_chr_addr(2);
+            Chr* p_chr = h_MsGetChr(2);
+            nint Pchr_base = (nint)p_chr;
 
-            
+
             int Pspeed1 = *(int*)(Pchr_base + 0x9e4);
             ImGui.Text("Speed1 value: " + Pspeed1);
             int Pspeed2 = *(int*)(Pchr_base + 0x9e8);
@@ -218,7 +214,8 @@ public unsafe class TbDebugModule : FhModule {
                 "Enemy 1 Status Info",
                 ImGuiWindowFlags.NoFocusOnAppearing
                 );
-            nint Echr_base = h_get_chr_addr(0xf);
+            Chr* e_chr = h_MsGetChr(0xf);
+            nint Echr_base = (nint)e_chr;
 
             int Espeed1 = *(int*)(Echr_base + 0x9e4);
             ImGui.Text("Speed1 value: " + Espeed1);
@@ -272,12 +269,12 @@ public unsafe class TbDebugModule : FhModule {
 
     }
 
-    public nint h_get_chr_addr(uint chr_id) {
-        return _get_chr_addr_handle.orig_fptr.Invoke(chr_id);
+    public Chr* h_MsGetChr(uint chr_id) {
+        return FFX2.FhCall.MsGetChr.chain_from(h_MsGetChr).fnptr!(chr_id);
     }
 
     public override bool init(FhModContext mod_context, FileStream global_state_file) {
-        _get_chr_addr_handle.hook();
+        FFX2.FhCall.MsGetChr.hook(this, h_MsGetChr);
         return true;
     }
 

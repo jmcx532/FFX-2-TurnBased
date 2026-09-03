@@ -1,42 +1,29 @@
-﻿// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: MIT
 
 namespace Fahrenheit.Modules.FFX2TurnBased;
 
-//function delegates
-[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-public delegate uint MsSetATBwait(byte target_value);
-[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-public delegate int MsGetChr(uint chr_id);
-
 [FhLoad(FhGameId.FFX2)]
 public class TurnBasedModule : FhModule {
-    
-    private readonly FhMethodHandle<MsSetATBwait>_MsSetATBwait_handle;
-    private readonly FhMethodHandle<MsGetChr> _MsGetChr_handle;
 
-    public TurnBasedModule() {
-        int addr_offset = 0x400000;
-
-        
-        _MsSetATBwait_handle = new FhMethodHandle<MsSetATBwait>(this, "FFX-2.exe", 0x634ae0 - addr_offset, h_MsSetATBwait);
-        _MsGetChr_handle = new FhMethodHandle<MsGetChr>(this, "FFX-2.exe", 0x611450 - addr_offset, h_MsGetChr);
-    }
+    public TurnBasedModule() { }
 
     /*this function gets the base address of a characters Battle data section
      * If it's parameter is less than 31 it returns a characters BattleData base address
      *If it's passed with a parameter greater than 155 it does end of battle cleanup I noticed from logging before
      * Chr ids: Y: 0, R: 2, P: 3 -- enemies from 15 onward
      */
-    public int h_MsGetChr(uint chr_id) {
-        return _MsGetChr_handle.orig_fptr.Invoke(chr_id);
+    public unsafe Chr* h_MsGetChr(uint chr_id)
+    {
+        return FFX2.FhCall.MsGetChr.chain_from(h_MsGetChr).fnptr!(chr_id);
     }
 
-    
-    public unsafe uint h_MsSetATBwait(byte target_value) {
+
+    public unsafe int h_MsSetATBwait(sbyte target_value) {
 
         //wait loop - counterattack handling
         for (uint i = 0; i < 31; i++) {
-            nint chr_base = h_MsGetChr(i);
+            Chr* chr = h_MsGetChr(i);
+            int chr_base = (int)chr;
             byte is_countering = *(byte*)(chr_base + 0xe6c);
             
             if(is_countering == 1)
@@ -66,8 +53,9 @@ public class TurnBasedModule : FhModule {
         return 1;
     }
 
-    public override bool init(FhModContext mod_context, FileStream global_state_file) {
-        return _MsSetATBwait_handle.hook() && _MsGetChr_handle.hook();
+    public unsafe override bool init(FhModContext mod_context, FileStream global_state_file) {
+        return FFX2.FhCall.MsSetATBwait.hook(this, h_MsSetATBwait) 
+            && FFX2.FhCall.MsGetChr.hook(this, h_MsGetChr);
     }
 
     public override void load_local_state(FileStream? local_state_file, FhLocalStateInfo local_state_info) { }

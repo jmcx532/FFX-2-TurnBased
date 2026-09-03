@@ -7,3 +7,6 @@ global using System.Runtime.InteropServices;
 global using System.Collections.Generic;
 
 global using Hexa.NET.ImGui;
+
+global using Fahrenheit.FFX2;
+global using Fahrenheit.FFX2.Battle;
