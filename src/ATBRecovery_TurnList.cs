@@ -1,5 +1,3 @@
-﻿
-using TerraFX.Interop.Windows;
 
 namespace Fahrenheit.Modules.FFX2TurnBased;
 
@@ -12,16 +10,17 @@ public unsafe partial class ATBRecoveryModule : FhModule {
     const int ATB_LENGTH_OFFSET = 0x9DC;
 
     const uint TURNS_TO_SHOW = 16;
-    
+
     int ReadATBValue(uint chr_id) {
-        int chr_base_addr = h_MsGetChr(chr_id);
+        Chr* chr = FFX2.FhCall.MsGetChr.fnptr!(chr_id);
+        int chr_base_addr = (int)chr;
         int atb_remaining = *(int*)(chr_base_addr + ATB_REMAIN_OFFSET);
 
         return atb_remaining;
     }
 
     public struct SimTurnEntry {
-        public uint chr_id; 
+        public uint chr_id;
         public int time; // at what point of simulation is the turn
         public string chr_name;
         public bool is_Targeted;
@@ -62,7 +61,10 @@ public unsafe partial class ATBRecoveryModule : FhModule {
         for(int i = 0; i < length_array.Length; i++) {
             SimBattleUnit chr = new SimBattleUnit();
             chr.chr_id = i;
-            chr.base_addr = h_MsGetChr((uint)i);
+
+            Chr* chr_struct = FFX2.FhCall.MsGetChr.fnptr!((uint)i);
+            chr.base_addr = (int)chr_struct;
+
             chr.mon_id = *(ushort*)(chr.base_addr + 0xe);
             chr.chr_name = ReadChrName((uint)chr.chr_id);
             chr.atb_remaining = ReadATBValue((uint)chr.chr_id);
@@ -127,7 +129,7 @@ public unsafe partial class ATBRecoveryModule : FhModule {
                 BattleUnits[t].isTargeted = IsTargeted((uint)BattleUnits[t].chr_id);
             }
 
-            int cmd_base = h_MsGetComData(hovered_command, (byte*)0);
+            int cmd_base = _MsGetComData.fnptr!(hovered_command, (byte*)0);
 
             uint com_dmg_data = *(uint*)(cmd_base + 0x1c);                  // get damage flags
             bool comHealsStatuses = ((com_dmg_data >> 5) & 1) != 0;
@@ -135,10 +137,10 @@ public unsafe partial class ATBRecoveryModule : FhModule {
             bool comInflictsSlow = (*(byte*)(cmd_base + 0x4c) > 0) && !comHealsStatuses;       // Does command inflict Slow
 
             uint com_exp_data = *(uint*)(cmd_base + 0x14);                  // get exp_data flags
-            
 
-            uint WEAK_DELAY = FhUtil.get_at<uint>(0x9f8ea0);
-            uint STRONG_DELAY = FhUtil.get_at<uint>(0x9f8ea4);
+
+            uint WEAK_DELAY = FhUtil.get_at<uint>(0x9F6EA0);
+            uint STRONG_DELAY = FhUtil.get_at<uint>(0x9F6EA4);
 
 
             bool comWeakDelay = (com_exp_data & 0x1000) != 0;             // is weak delay flag set?
@@ -163,9 +165,9 @@ public unsafe partial class ATBRecoveryModule : FhModule {
                         if (comInflictsSlow && !unit.hasSlow) { unit.atb_remaining += (int)STRONG_DELAY; }
                     }
 
-                   
+
                     bool cmdTgtsATBNoHasteOrSlow = (cmdHasATBHealingOrDmg && !comInflictsHaste && !comInflictsSlow);
-                    
+
 
                     if (cmdHasATBHealingOrDmg) {
                         byte cmd_power = *(byte*)(cmd_base + 0x2b);
@@ -218,15 +220,15 @@ public unsafe partial class ATBRecoveryModule : FhModule {
         return turn_order;
     }
 
-    public int SimGetATBRestTime(uint chr_id, uint command_id, bool evaluate_spherechange) { 
+    public int SimGetATBRestTime(uint chr_id, uint command_id, bool evaluate_spherechange) {
         int recovery_time;
         SimBattleUnit? BattleUnit = BattleUnits.FirstOrDefault(chr => chr.chr_id == chr_id);
-        if (BattleUnit == null) { 
-            _logger.Info("SimGetATBRestTime: BattleUnit Null"); 
-            return 0; 
+        if (BattleUnit == null) {
+            _logger.Info("SimGetATBRestTime: BattleUnit Null");
+            return 0;
         }
 
-        int cmd_base_address = h_MsGetComData(command_id, (byte*)(0));
+        int cmd_base_address = _MsGetComData.fnptr!(command_id, (byte*)(0));
         int cmd_recovery_time = (int)(*(ushort*)(cmd_base_address + 0x22) * 10000);
         byte agility = (*(byte*)(BattleUnit.base_addr + 0x39a));
 
@@ -242,7 +244,7 @@ public unsafe partial class ATBRecoveryModule : FhModule {
         }
         uint agility_divisor = (uint)Math.Round(divisor);
 
-        recovery_time = h_clamp_between((int)((cmd_recovery_time / agility_divisor)), 0, 99999);
+        recovery_time = int.Clamp((int)((cmd_recovery_time / agility_divisor)), 0, 99999);
 
         if (BattleUnit.hasHaste){ recovery_time = recovery_time / 2; }
         if (BattleUnit.hasSlow) { recovery_time = recovery_time * 2; }
@@ -254,21 +256,21 @@ public unsafe partial class ATBRecoveryModule : FhModule {
 
 
         // calculate recovery time if spherechanging
-        byte spherechange_menu_open = FhUtil.get_at<byte>(0x9F7000);
+        byte spherechange_menu_open = FhUtil.get_at<byte>(0x9F5000);
         ushort highlighted_dressphere = 0x5001;
         switch (chr_id) {
             case 0: // Yuna
-                highlighted_dressphere = FhUtil.get_at<ushort>(0xA016F6);
+                highlighted_dressphere = FhUtil.get_at<ushort>(0x9FF6F6);
                 break;
             case 1: // Rikku
-                highlighted_dressphere = FhUtil.get_at<ushort>(0xA01776);
+                highlighted_dressphere = FhUtil.get_at<ushort>(0x9FF776);
                 break;
             case 2: // Paine
-                highlighted_dressphere = FhUtil.get_at<ushort>(0xA017F6);
+                highlighted_dressphere = FhUtil.get_at<ushort>(0x9FF7F6);
                 break;
         }
 
-         
+
         if (spherechange_menu_open == 1 && evaluate_spherechange) {
             int job_base_address = GetDressphereJobData(highlighted_dressphere);
             if (job_base_address != 0) {
@@ -306,7 +308,7 @@ public unsafe partial class ATBRecoveryModule : FhModule {
     int GetDressphereJobData(ushort dressphere_id) {
         int job_data_address;
 
-        int job_bin_addr = FhUtil.get_at<int>(0x9f9188);// read job.bin pointer
+        int job_bin_addr = FhUtil.get_at<int>(0x9F8188);// read job.bin pointer
 
 
         uint ds_id = (uint)(dressphere_id & 0xfff);
@@ -320,7 +322,7 @@ public unsafe partial class ATBRecoveryModule : FhModule {
 
     // returns true if chr_id is being targeted
     public bool IsTargeted(uint chr_id) {
-        uint targeted_chrs_field = FhUtil.get_at<uint>(0xdb74b8);
+        uint targeted_chrs_field = FhUtil.get_at<uint>(0xdb64B8);
         uint[] targeted_chrs = new uint[31];
 
         for (int i = 0;i < targeted_chrs.Length; i++) {
@@ -337,8 +339,8 @@ public unsafe partial class ATBRecoveryModule : FhModule {
 
     //returns the id of which command is being hovered over, used to update the view when current character hovers over different commands
     ushort GetHoveredCommand() {
-        ushort sub  = FhUtil.get_at<ushort>(0x00DB7388);
-        ushort main = FhUtil.get_at<ushort>(0x00DB7380);
+        ushort sub  = FhUtil.get_at<ushort>(0xdb6388);
+        ushort main = FhUtil.get_at<ushort>(0xdb6380);
 
         return (sub != 0x00FF && sub != 0xFF00)
             ? sub
@@ -347,7 +349,8 @@ public unsafe partial class ATBRecoveryModule : FhModule {
 
     //function to read character's name string, stored in BattleUnit - keep for debugging
     public unsafe string ReadChrName(uint chr_id) {
-        int chr_base_addr = h_MsGetChr(chr_id);
+        Chr* chr = FFX2.FhCall.MsGetChr.fnptr!(chr_id);
+        int chr_base_addr = (int)chr;
         //pointer to start of Chr name string
         byte* p = (byte*)(chr_base_addr + 0x358);
         Span<byte> buf = stackalloc byte[40];
@@ -371,7 +374,7 @@ public unsafe partial class ATBRecoveryModule : FhModule {
     uint GetCharacterColor(int chrId) {
         return chrId switch {
             0 => ImGui.ColorConvertFloat4ToU32(new Vector4(1.0f, 0.25f, 0.55f, 1f)), // red/pink - Yuna
-            1 => ImGui.ColorConvertFloat4ToU32(new Vector4(1.0f, 0.63f, 0.04f, 1f)), // yellow - Rikku 
+            1 => ImGui.ColorConvertFloat4ToU32(new Vector4(1.0f, 0.63f, 0.04f, 1f)), // yellow - Rikku
             2 => ImGui.ColorConvertFloat4ToU32(new Vector4(0.5f, 0.4f, 1.0f, 1f)),   // purple - Paine
             3 => ImGui.ColorConvertFloat4ToU32(new Vector4(0.6f, 0.15f, 0.3f, 1f)),   // darker pink - Pistil?
             4 => ImGui.ColorConvertFloat4ToU32(new Vector4(0.6f, 0.15f, 0.3f, 1f)),   // darker pink - Pistil?
@@ -391,7 +394,7 @@ public unsafe partial class ATBRecoveryModule : FhModule {
     // TURN ORDER WINDOW RENDERING --------------------------------------------------
     public override void render_imgui() {
         base.render_imgui();
-        int num_allies_ready = FhUtil.get_at<int>(0xDB7480);
+        int num_allies_ready = FhUtil.get_at<int>(0xDB6480);
 
         // if a player character has a turn - show the turn order window
         if (num_allies_ready != 0) {
@@ -400,8 +403,8 @@ public unsafe partial class ATBRecoveryModule : FhModule {
             ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0.18f, 0.28f, 0.15f, 0.0f)); // Green
             ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(4, 2));
             ImGui.PushStyleVar(ImGuiStyleVar.WindowBorderSize, 0.0f);
-            
-            
+
+
             ImGui.SetNextWindowSize(new Vector2(585, 45), ImGuiCond.Always);
             // Turn list, musical staff style
             ImGui.Begin(
@@ -471,7 +474,7 @@ public unsafe partial class ATBRecoveryModule : FhModule {
                 colMid, colRight, colRight, colMid
             );
 
-            
+
             // Start drawing musical notes sheet
             float padding = 4f;
             float timelineStartX = canvasPos.X + padding;
