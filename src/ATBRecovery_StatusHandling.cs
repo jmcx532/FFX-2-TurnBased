@@ -4,81 +4,13 @@
  * This class re-implements X-2's status handling through stubbing out MsStatusProcess
  * which is called continuously, and it's behaviour is replicated in another function
  * that can be called once at the appropriate time and process statuses
- * 
+ *
  */
 
 namespace Fahrenheit.Modules.FFX2TurnBased;
 public unsafe partial class ATBRecoveryModule : FhModule {
 
-    // Delegates and handles
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    public delegate void MsStatusProcess();
-    private static FhMethodHandle<MsStatusProcess> _MsStatusProcess =>
-        new ( new FhMethodLocation("FFX-2.exe", 0x236EB0) );
-
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    public delegate uint MsStatCheckStop(byte chr_id, int param_2);
-    private static FhMethodHandle<MsStatCheckStop> _MsStatCheckStop =>
-        new ( new FhMethodLocation("FFX-2.exe", 0x2430F0) );
-
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    public delegate uint FUN_636690(uint chr_id, int param_2, byte param_3);
-    private static FhMethodHandle<FUN_636690> _FUN_00636690 =>
-        new ( new FhMethodLocation("FFX-2.exe", 0x236690) );
-
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    public delegate byte MsATBActiveCheck(uint chr_id, uint param_2);
-    private static FhMethodHandle<MsATBActiveCheck> _MsATBActiveCheck =>
-        new ( new FhMethodLocation("FFX-2.exe", 0x233F90) );
-
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    public delegate ushort MsCheckStatCount(int param_1);
-    private static FhMethodHandle<MsCheckStatCount> _MsCheckStatCount =>
-        new ( new FhMethodLocation("FFX-2.exe", 0x2218E0) );
-
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    public delegate int MsCheckRange(int param_1, int param_2, int param_3);
-    private static FhMethodHandle<MsCheckRange> _MsCheckRange =>
-        new ( new FhMethodLocation("FFX-2.exe", 0x224CD0) );
-
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    public delegate void MsStructClear(void* param_1, uint param_2);
-    private static FhMethodHandle<MsStructClear> _MsStructClear =>
-        new ( new FhMethodLocation("FFX-2.exe", 0x22A0F0) );
-
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    public delegate void MsDamageBufferExe(uint chr_id1, uint chr_id2, void* param_3);
-    private static FhMethodHandle<MsDamageBufferExe> _MsDamageBufferExe =>
-        new ( new FhMethodLocation("FFX-2.exe", 0x2422D0) );
-
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    public delegate void MsSetStatus(uint chr_id, uint command_id, int param_3, int param_4);
-    private static FhMethodHandle<MsSetStatus> _MsSetStatus =>
-        new ( new FhMethodLocation("FFX-2.exe", 0x236CA0) );
-
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    public delegate uint MsSetChrWeak(uint chr_id, uint param_2);
-    private static FhMethodHandle<MsSetChrWeak> _MsSetChrWeak =>
-        new ( new FhMethodLocation("FFX-2.exe", 0x21B080) );
-
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    public delegate void MsStatusEffectCheck(byte chr_id);
-    private static FhMethodHandle<MsStatusEffectCheck> _MsStatusEffectCheck =>
-        new ( new FhMethodLocation("FFX-2.exe", 0x223290) );
-
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    public delegate int MsMotionRecoverExe(uint chr_id, int param_2);
-    private static FhMethodHandle<MsMotionRecoverExe> _MsMotionRecoverExe =>
-        new ( new FhMethodLocation("FFX-2.exe", 0x2330E0) );
-
-
-    /* This part is in ATBFRecovery_Main.cs
-    public ATBRecoveryModule() { 
-    
-    }
-    */
-
-    // Turn-based status handling 
+    // Turn-based status handling
     public void TbStatusProcess(uint chr_id) {
         uint ChrSpeedVal2;
         uint ChrSpeedVal3;
@@ -97,11 +29,8 @@ public unsafe partial class ATBRecoveryModule : FhModule {
         uint uVar6;
         short sVar1;
         uint local_48;
-        /*byte[] local_1c [4]; -- original Ghidra decomp 
-         * is DamageBuffer for PSN/RGN
-         */
 
-        Chr* chr = h_MsGetChr(chr_id);
+        Chr* chr = FFX2.FhCall.MsGetChr.fnptr!(chr_id);
         int chr_base = (int)chr;
 
         //status handling
@@ -118,7 +47,7 @@ public unsafe partial class ATBRecoveryModule : FhModule {
             local_38 = 0;
 
             // speed value stuff for statuses
-            uVar3 = h_MsStatCheckStop((byte)chr_id, 0);// Gets a small bitfield that has bits set if character is asleep, petrified or stopped
+            uVar3 = FFX2.FhCall.MsStatCheckStop.fnptr!((byte)chr_id, 0);// Gets a small bitfield that has bits set if character is asleep, petrified or stopped
             // If under sleep/pet/stop - manipulate speed values - 0 ATB Fill, conditional anim modifier - sleep doesn't freeze, the other two do
             if (uVar3 != 0) {
                 if ((uVar3 & 0xFFFFFFFB) != 0) {
@@ -155,7 +84,7 @@ public unsafe partial class ATBRecoveryModule : FhModule {
                     *piVar8 = iVar5;// write the updates value
                 }
                 //uVar3 = uVar3 << 1 | (uint)((int)uVar3 < 0);
-                //uVar3 = (uVar3 << 1) | ((uVar3 & 0x80000000) >> 31); 
+                //uVar3 = (uVar3 << 1) | ((uVar3 & 0x80000000) >> 31);
                 uVar3 = (uVar3 << 1) | (uint)((int)uVar3 < 0 ? 1 : 0);// commented line replaced with this
 
                 uVar4 = uVar4 + 1;// increase iterator
@@ -165,7 +94,7 @@ public unsafe partial class ATBRecoveryModule : FhModule {
 
             *(uint*)(chr_base + 0x450) = uVar7;// write the character's updated status bitfield
 
-        // Sbyte / Count status timer handling
+        // SBYTE / COUNT STATUS HANDLING
             local_30 = (short*)(chr_base + 0x4cc);// ???
             uVar4 = 0;// iterator value
             do {
@@ -177,18 +106,18 @@ public unsafe partial class ATBRecoveryModule : FhModule {
                 if (uVar3 < 125) {
 
                     //Block for statuses that use rom.bin->count_value - ? and Doom
-                    uVar7 = h_MsCheckStatCount(uVar4);// MsCheckStatCount? -- //return *(undefined2 *)(&DAT_00d49804 + iVar4 * 6);
+                    uVar7 = FFX2.FhCall.MsCheckStatCount.fnptr!(uVar4);// MsCheckStatCount? -- //return *(undefined2 *)(&DAT_00d49804 + iVar4 * 6);
                     iVar9 = 0;
                     if ((uVar7 & 4) != 0) {
                         /* Reads rom.bin count_value (the first one) */
                         //iVar9 = DAT_00df8e84;
-                        iVar9 = (int)FhUtil.get_at<uint>(0x9f8e84);
+                        iVar9 = (int)FhUtil.get_at<uint>(0x9F7E84);
                     }
                     bVar10 = (uVar7 & 8) != 0;// is true if under some status, but uVar7 changes ^^^ different iterator
                     if (bVar10) {
                         // Reads rom.bin count_value (the second one) -- for Doom?
                         //iVar9 = DAT_00df8e88;
-                        iVar9 = (int)FhUtil.get_at<uint>(0x9f8e88);
+                        iVar9 = (int)FhUtil.get_at<uint>(0x9F7E88);
                     }
 
 
@@ -212,8 +141,6 @@ public unsafe partial class ATBRecoveryModule : FhModule {
                             }
                         }
 
-
-
                         //sVar1 = *local_30 + (short)uVar6;
                         //sVar1 = (short)(*local_30 + (short)uVar6);
                         sVar1 = (short)(*local_30 + (int)uVar6);
@@ -227,12 +154,12 @@ public unsafe partial class ATBRecoveryModule : FhModule {
                             *local_30 = (short)(sVar1 - iVar9);
 
                             local_48 = bVar10 ? 1u : 0u; // bVar10 as a number
-                            iVar5 = h_MsCheckRange((int)uVar3, (int)local_48, 0x7d); //624cd0
+                            iVar5 = int.Clamp((int)uVar3, (int)local_48, 0x7d);
                             /* Update decremented status value in Second set of Chr sbyte timed statuses */
                             *(byte*)(chr_base + 0x4b4 + uVar4) = (byte)iVar5;
                             if (iVar5 <= (int)local_48) {
                                 local_28 = local_28 + 1;
-                                h_FUN_00636690(chr_id, chr, (byte)uVar7);
+                                FFX2.FhCall.FUN_00236660.fnptr!(chr_id, chr, (byte)uVar7);
                             }
                         }
                     }
@@ -262,7 +189,7 @@ public unsafe partial class ATBRecoveryModule : FhModule {
                     DamageBuffer psn_buffer = new();
                     DamageBuffer* pBuffer = &psn_buffer;
 
-                    h_MsStructClear(pBuffer, 0x14);//62a0f0
+                    //FFX2.FhCall.MsStructClear.fnptr!(pBuffer, 0x14);//62a0f0
                     //local_18 = 0x100ff;
                     psn_buffer.com_id = 0xff;
                     psn_buffer.target_stat = 0x01;
@@ -271,16 +198,16 @@ public unsafe partial class ATBRecoveryModule : FhModule {
                     //local_14 = psn_damage_amount;
                     psn_buffer.damage_hp = psn_damage_amount;
 
-                    h_MsDamageBufferExe(chr_id, chr_id, pBuffer);//6422d0
+                    FFX2.FhCall.MsDamageBufferExe.fnptr!(chr_id, chr_id, pBuffer);//6422d0
 
-                    
+
                 }
             }
 
             if (local_2c != 0) {
                 /* Status timer decrementer */
-                h_MsSetStatus(chr_id, 0xff, 1, 1);//636ca0
-                h_MsSetChrWeak(chr_id, -1);//61b080
+                FFX2.FhCall.MsSetStatus.fnptr!(chr_id, 0xff, 1, 1);//636ca0
+                FFX2.FhCall.MsSetChrWeak.fnptr!(chr_id, -1);//61b080
             }
 
             int iVar6;
@@ -289,7 +216,7 @@ public unsafe partial class ATBRecoveryModule : FhModule {
             }
             else {
                 iVar6 = 2;
-                h_MsStatusEffectCheck((byte)chr_id);//623290
+                FFX2.FhCall.MsStatusEffectCheck.fnptr!((byte)chr_id);//623290
 
 
             }
@@ -300,7 +227,7 @@ public unsafe partial class ATBRecoveryModule : FhModule {
             else {
                 iVar6 = 0xc;
             }
-            h_MsMotionRecoverExe(chr_id, iVar6);//6330e0
+            FFX2.FhCall.MsMotionRecoverExe.fnptr!(chr_id, iVar6);//6330e0
 
             return;
         }
@@ -315,9 +242,9 @@ public unsafe partial class ATBRecoveryModule : FhModule {
         int* piVar8;
 
         uint chr_id = 0;
-        
+
         do {
-            Chr* chr = h_MsGetChr(chr_id);// Get Chr base address
+            Chr* chr = FFX2.FhCall.MsGetChr.fnptr!(chr_id);// Get Chr base address
             int chr_base = (int)chr;
             // Checks character is active, ?, has HP remaining, some chr state flag and if not petrified
             if ((((*(byte*)(chr_base + 0x1784) != 0) && (*(byte*)(chr_base + 0x1792) == 0)) && (0 < *(int*)(chr_base + 0x3b4))) &&
@@ -328,8 +255,8 @@ public unsafe partial class ATBRecoveryModule : FhModule {
                 ChrSpeedVal3 = *(uint*)(chr_base + 0x9ec);
                 ChrSpeedVal4 = *(uint*)(chr_base + 0x9f0);
 
-                //6430f0 
-                uVar3 = h_MsStatCheckStop((byte)chr_id, 0);// Gets a small bitfield that has bits set if character is asleep, petrified or stopped
+                //6430f0
+                uVar3 = FFX2.FhCall.MsStatCheckStop.fnptr!((byte)chr_id, 0);// Gets a small bitfield that has bits set if character is asleep, petrified or stopped
 
                   // If under sleep/pet/stop - manipulate speed values - 0 ATB Fill, conditional anim modifier - sleep doesn't freeze, the other two do
                 if (uVar3 != 0) {
@@ -365,7 +292,7 @@ public unsafe partial class ATBRecoveryModule : FhModule {
                         DamageBuffer rgn_buffer = new();
                         DamageBuffer* rBuffer = &rgn_buffer;
 
-                        h_MsStructClear(rBuffer, 0x14);//62a0f0
+                        //FFX2.FhCall.MsStructClear.fnptr!(rBuffer, 0x14);//62a0f0
                                                        //local_18 = 0x100ff;
                         rgn_buffer.com_id = 0xff;
                         rgn_buffer.target_stat = 0x01;
@@ -374,7 +301,7 @@ public unsafe partial class ATBRecoveryModule : FhModule {
                         //local_14 = psn_damage_amount;
                         rgn_buffer.damage_hp = regen_amount;
 
-                        h_MsDamageBufferExe(chr_id, chr_id, rBuffer);//6422d0
+                        FFX2.FhCall.MsDamageBufferExe.fnptr!(chr_id, chr_id, rBuffer);//6422d0
                     }
                 }
 
@@ -389,36 +316,6 @@ public unsafe partial class ATBRecoveryModule : FhModule {
     //MsStatusProcess nixed
     public void h_MsStatusProcess() {
         return;
-    }
-    public uint h_MsStatCheckStop(byte chr_id, int param_2) {
-        return FFX2.FhCall.MsStatCheckStop.chain_from(h_MsStatCheckStop).fnptr!(chr_id, param_2);
-    }
-    public uint h_MsATBActiveCheck(uint chr_id, uint param_2) {
-        return FFX2.FhCall.MsATBActiveCheck.chain_from(h_MsATBActiveCheck).fnptr!(chr_id, param_2);
-    }
-    public uint h_MsCheckStatCount(uint param_1) {
-        return FFX2.FhCall.MsCheckStatCount.chain_from(h_MsCheckStatCount).fnptr!(param_1);
-    }
-    public uint h_FUN_00636690(uint chr_id, Chr* param_2, byte param_3) {
-        return FFX2.FhCall.FUN_00636690.chain_from(h_FUN_00636690).fnptr!(chr_id, param_2, param_3);
-    }
-    public unsafe void h_MsStructClear(void* param_1, uint param_2) {
-        FFX2.FhCall.MsStructClear.chain_from(h_MsStructClear).fnptr!(param_1, param_2);
-    }
-    public void h_MsDamageBufferExe(uint chr_id1, uint chr_id2, DamageBuffer* param_3) {
-        FFX2.FhCall.MsDamageBufferExe.chain_from(h_MsDamageBufferExe).fnptr!(chr_id1, chr_id2, param_3);
-    }
-    public void h_MsSetStatus(uint chr_id, uint command_id, int param_3, int param_4) {
-        FFX2.FhCall.MsSetStatus.chain_from(h_MsSetStatus).fnptr!(chr_id, command_id, param_3, param_4);
-    }
-    public int h_MsSetChrWeak(uint chr_id, int param_2) {
-        return FFX2.FhCall.MsSetChrWeak.chain_from(h_MsSetChrWeak).fnptr!(chr_id, param_2);
-    }
-    public void h_MsStatusEffectCheck(uint chr_id) {
-        FFX2.FhCall.MsStatusEffectCheck.chain_from(h_MsStatusEffectCheck).fnptr!(chr_id);
-    }
-    public int h_MsMotionRecoverExe(uint chr_id, int param_2) {
-        return FFX2.FhCall.MsMotionRecoverExe.chain_from(h_MsMotionRecoverExe).fnptr!(chr_id, param_2);
     }
 
 
