@@ -1,7 +1,11 @@
 ﻿<Project Sdk="Fahrenheit.Sdk/1.0.0-alpha12">
     <PropertyGroup>
-        <AssemblyName>ffx2TurnBased</AssemblyName>
-        <AssemblyTitle>FFX2 Turn Based</AssemblyTitle>
-        <Product>FFX2 Turn Based</Product>
+        <AssemblyName>FFX2TurnBased</AssemblyName>
+        <AssemblyTitle>FFX2TurnBased</AssemblyTitle>
+        <Product>FFX2TurnBased</Product>
+        <Description>A mod to make FFX-2s battle system Turn Based.</Description>
+        <Authors>jmcx532</Authors>
+        <RepositoryUrl>https://github.com/jmcx532/FFX-2-TurnBased.git</RepositoryUrl>
+        <FhManifestFlags>NONE</FhManifestFlags>
     </PropertyGroup>
 </Project>
