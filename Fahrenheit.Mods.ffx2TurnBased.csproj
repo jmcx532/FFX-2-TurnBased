@@ -1,4 +1,4 @@
-﻿<Project Sdk="Fahrenheit.Sdk/1.0.0-alpha09">
+﻿<Project Sdk="Fahrenheit.Sdk/1.0.0-alpha12">
     <PropertyGroup>
         <AssemblyName>ffx2TurnBased</AssemblyName>
         <AssemblyTitle>FFX2 Turn Based</AssemblyTitle>
